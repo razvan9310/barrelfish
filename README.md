@@ -1,4 +1,5 @@
-This is the repository that contains the handouts for the AOS course.
+This is the repository that contains the handouts for the
+[AOS course](http://www.systems.ethz.ch/courses/fall2016/aos).
 
 Those handouts include
  * Lecture slides
