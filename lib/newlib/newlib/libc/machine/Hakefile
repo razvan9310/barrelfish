@@ -1,0 +1,14 @@
+let
+    arch_srcs "armv7"   = [ "arm/setjmp.S" ]
+    arch_srcs  x        = error ("Unknown architecture for newlib: " ++ x)
+in
+[ build library {
+  target = "machine",
+  addCFlags  = Config.newlibAddCFlags,
+  omitCFlags = [ "-Wmissing-prototypes",
+                 "-Wmissing-declarations",
+                 "-Wimplicit-function-declaration",
+                 "-Werror"],
+  assemblyFiles = arch_srcs arch,
+  architectures = [arch]
+} | arch <- allArchitectures ]
