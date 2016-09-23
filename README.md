@@ -8,3 +8,6 @@ Those handouts include
  
 See the relevant milestone description for detailed instructions on how to use
 this repository.
+
+Each week's materials will be put into this repository in a branch named weekN
+where N is the number of the week.
