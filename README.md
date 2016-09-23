@@ -5,9 +5,10 @@ Those handouts include
  * Lecture slides
  * Project milestone descriptions
  * Project milestone code handouts
- 
-See the relevant milestone description for detailed instructions on how to use
-this repository.
+
 
 Each week's materials will be put into this repository in a branch named weekN
-where N is the number of the week.
+where N is the number of the week. 
+
+See the relevant milestone description (branch weekN, handouts/milestoneX.pdf)
+for detailed instructions on how to use this repository.
