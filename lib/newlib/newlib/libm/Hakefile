@@ -1,0 +1,5 @@
+[ build library { 
+  target = "m",
+  addLibraries = [ "math", "common", "complex" ]
+   }
+]

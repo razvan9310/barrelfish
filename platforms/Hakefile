@@ -1,0 +1,149 @@
+--------------------------------------------------------------------------
+-- Copyright (c) 2015-2016 ETH Zurich.
+-- All rights reserved.
+--
+-- This file is distributed under the terms in the attached LICENSE file.
+-- If you do not find this file, copies can be found by writing to:
+-- ETH Zurich D-INFK, Universitaetstr. 6, CH-8092 Zurich. Attn: Systems Group.
+--
+-- Hakefile for /platforms/
+--
+--------------------------------------------------------------------------
+
+let    -- Default list of modules to build/install
+    modules_common = [ "init" ]
+
+    -- ARMv7-a Pandaboard modules: ADd
+    pandaModules = [ "/sbin/" ++ f | f <- [
+                        "cpu_omap44xx"
+                        ] ++ modules_common ]
+
+    -- ARMv7-A modules for Versatile Express EMM board (GEM5, qemu)
+    vExpressEMMModules_A15 = [ "/sbin/" ++ f | f <- [
+                               "cpu_a15ve"
+                               ] ++ modules_common ]
+
+    -- ARMv7-A modules for Versatile Express EMM board (FVP)
+    vExpressEMMModules_A9 = [ "/sbin/" ++ f | f <- [
+                              "cpu_a9ve"
+                              ] ++ modules_common ]
+
+    armv7Image target bootTarget cpuTarget physBase modules =
+        let bootDriver = "/sbin/boot_" ++ bootTarget
+            cpuDriver  = "/sbin/cpu_"  ++ cpuTarget
+            image      = "/" ++ target ++ "_image"
+        in Rules [
+            Rule ([ In BuildTree "tools" "/bin/arm_bootimage",
+                    In BuildTree "root" ("/platforms/arm/menu.lst."++target),
+                    In BuildTree "armv7" bootDriver,
+                    Out "root" image,
+                    NoDep BuildTree "root" "/",
+                    Str physBase ] ++
+                    [ (Dep BuildTree "armv7" m) | m <- modules ] ),
+
+            Rule ([ Str Config.arm_objcopy,
+                    Str "-O binary",
+                    In BuildTree "root" image,
+                    Out "root" (image ++ ".bin") ]),
+            Rule ([ In SrcTree "tools" "/tools/arm_boot/gdb_script.sh",
+                    Str Config.arm_objdump,
+                    In BuildTree "root" image,
+                    In BuildTree "armv7" bootDriver,
+                    In BuildTree "armv7" cpuDriver,
+                    Out "root" (image ++ "-gdb.gdb") ])
+            ]
+  in
+ [
+   --
+   -- Rules to build assorted platforms
+   --
+
+    platform "PandaboardES" [ "armv7" ]
+    ([ ("armv7", f) | f <- pandaModules ] ++
+     [ ("root", "/armv7_omap44xx_image"),
+       ("root", "/armv7_omap44xx_image-gdb.gdb") ])
+    "Standard Pandaboard ES build image and modules",
+
+    platform "VExpressEMM-A15" [ "armv7" ]
+    ([ ("armv7", f) | f <- vExpressEMMModules_A15 ] ++
+     [ ("root", "/armv7_a15ve_image"),
+       ("root", "/armv7_a15ve_image-gdb.gdb"),
+       ("root", "/armv7_a15ve_gem5_image"),
+       ("root", "/armv7_a15ve_gem5_image-gdb.gdb") ])
+    "VersatileExpress EMM board with ARM Cortex-A15s under GEM5",
+
+    platform "VExpressEMM-A9" [ "armv7" ]
+    ([ ("armv7", f) | f <- vExpressEMMModules_A9 ] ++
+     [ ("root", "/armv7_a9ve_image"),
+       ("root", "/armv7_a9ve_image-gdb.gdb") ])
+    "VersatileExpress EMM board for ARMv7-A Fixed Virtual Platforms",
+
+    --
+    -- Rules to build assorted boot images
+    --
+
+    -- Build the AOS milestone 0 image
+    armv7Image "armv7_aos_m0" "omap44xx" "aos_m0" "0x80000000"
+               ["/sbin/cpu_aos_m0"],
+
+    -- Build the default PandaBoard boot image
+    armv7Image "armv7_omap44xx" "omap44xx" "omap44xx" "0x80000000" pandaModules,
+
+    -- Build the A15 simulation image (VersatileExpress EMM board)
+    armv7Image "armv7_a15ve" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
+
+    -- Build the A15 simulation image (VersatileExpress EMM board, with GEM5
+    -- quirks)
+    armv7Image "armv7_a15ve_gem5" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
+
+    -- Build the A9 simulation image (VersatileExpress EMM board)
+    armv7Image "armv7_a9ve" "ve" "a15ve" "0x80000000" vExpressEMMModules_A9,
+
+    --
+    -- Booting: various targets for booting Barrelfish under different circumstances
+    --
+
+    -- Copy menu.list files across
+    Rules [ copyFile SrcTree "root" ("/hake/menu.lst." ++ p)
+                     "root" ("/platforms/arm/menu.lst." ++ p)
+            | p <- [ "armv7_a9ve",
+                     "armv7_a15ve",
+                     "armv7_a15ve_gem5",
+                     "armv7_omap44xx",
+                     "armv7_aos_m0" ]],
+
+    boot "gem5_armv7_vexpressemm" [ "armv7" ] [
+      In SrcTree "tools" "/tools/arm_gem5/boot_gem5.sh",
+      Str "VExpress_EMM",
+      In BuildTree "root" "/armv7_a15ve_gem5_image" ]
+    "Boot an ARMv7a multicore image on a VersatileExpress EMM board in GEM5",
+
+    boot "FVP_VE_A9x1" [ "armv7" ] [
+      Str "FVP_VE_Cortex-A9x1",
+      In BuildTree "root" "/armv7_a9ve_image" ]
+    "Boot on a single-core Cortex-A9 FVP model",
+
+    boot "FVP_VE_A9x4" [ "armv7" ] [
+      Str "FVP_VE_Cortex-A9x4",
+      In BuildTree "root" "/armv7_a9ve_image" ]
+    "Boot on a four-core Cortex-A9 FVP model",
+
+    boot "qemu_a15ve" [ "armv7" ] [
+      In SrcTree "tools" "/tools/qemu-wrapper.sh",
+      Str "--image", In BuildTree "root" "/armv7_a15ve_image",
+      Str "--arch", Str "a15ve" ]
+    "Boot QEMU in 32-bit ARM mode emulating a Versatile Express board",
+
+    boot "usbboot_panda" [ "armv7" ] [
+      In BuildTree "tools" "/bin/usbboot",
+      In BuildTree "root" "/armv7_omap44xx_image"
+    ]
+    "Boot Barrelfish on a Pandaboard, over a local USB cable",
+
+    boot "usbboot_aos_m0" [ "armv7" ] [
+      In BuildTree "tools" "/bin/usbboot",
+      In BuildTree "root" "/armv7_aos_m0_image"
+    ]
+    "Boot AOS M0 on a Pandaboard, over a local USB cable"
+
+ ]
