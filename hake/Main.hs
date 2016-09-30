@@ -413,7 +413,7 @@ wrapHake hakefile hake_exp =
                                       (Var (UnQual (Ident "sourceDB"))))
                                  (Lit (String hakefile)))
                        (Var (UnQual (Ident "arg"))))))
-            (BDecls [])],
+            (Just (BDecls []))],
 
         FunBind [Match
             dummy_loc
@@ -426,7 +426,7 @@ wrapHake hakefile hake_exp =
                                (Var (UnQual (Ident "sourceDB"))))
                           (Lit (String hakefile)))
                      (Var (UnQual (Ident "a")))))
-            (BDecls [])]
+            (Just (BDecls []))]
         ])
         (Paren (App (Con (UnQual (Ident "Rules")))
                     hake_exp))

@@ -140,6 +140,9 @@ arch_init(struct arm_core_data *boot_core_data) {
 
     MSG("Welcome to AOS.\n");
 
+    serial_putchar(0, 42);
+    printf("It's alive :)\n");
+
     blink_leds();
 
     while(1);
