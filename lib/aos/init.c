@@ -16,7 +16,6 @@
 
 #include <stdio.h>
 #include <aos/aos.h>
-#include <aos/idc.h>
 #include <aos/dispatch.h>
 #include <aos/curdispatcher_arch.h>
 #include <aos/dispatcher_arch.h>

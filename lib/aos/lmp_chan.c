@@ -16,7 +16,6 @@
 #include <aos/lmp_chan.h>
 #include <aos/dispatcher_arch.h>
 #include <aos/caddr.h>
-#include <aos/idc_export.h>
 #include <aos/waitset_chan.h>
 #include "waitset_chan_priv.h"
 
