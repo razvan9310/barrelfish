@@ -19,24 +19,12 @@
 
 #include <aos/waitset.h>
 #include <aos/lmp_endpoints.h>
-#include <aos/idc.h>
 #include <assert.h>
 
 __BEGIN_DECLS
 
 struct lmp_chan;
 struct event_queue_node;
-
-struct lmp_bind_continuation {
-    /**
-     * \brief Handler which runs when a binding succeeds or fails
-     * \param st State pointer set in closure
-     * \param err Success/failure of binding
-     * \param lc On success, contains pointer to channel
-     */
-    void (*handler)(void *st, errval_t err, struct lmp_chan *lc);
-    void *st;
-};
 
 /// A bidirectional LMP channel
 struct lmp_chan {
@@ -52,18 +40,11 @@ struct lmp_chan {
           LMP_CONNECTED,        ///< Connection established
     } connstate;
 
-    /* Arguments for an ongoing bind attempt */
-    struct monitor_binding *monitor_binding;
-    struct lmp_bind_continuation bind_continuation; ///< Continuation for bind
-    iref_t iref;            ///< IREF
     size_t buflen_words;    ///< requested LMP buffer length, in words
 };
 
 void lmp_chan_init(struct lmp_chan *lc);
 void lmp_chan_destroy(struct lmp_chan *lc);
-errval_t lmp_chan_bind(struct lmp_chan *lc, struct lmp_bind_continuation cont,
-                       struct event_queue_node *qnode, iref_t iref,
-                       size_t buflen_words);
 errval_t lmp_chan_accept(struct lmp_chan *lc, size_t buflen_words,
                          struct capref endpoint);
 errval_t lmp_chan_register_send(struct lmp_chan *lc, struct waitset *ws,
@@ -171,23 +152,6 @@ static inline bool lmp_err_is_transient(errval_t err)
            || ec == SYS_ERR_LMP_TARGET_DISABLED;
 }
 
-/**
- * \brief Apply generic IDC control operation to LMP send flags
- */
-static inline lmp_send_flags_t idc_control_to_lmp_flags(idc_control_t control,
-                                                        lmp_send_flags_t flags)
-{
-    switch (control) {
-    case IDC_CONTROL_SET_SYNC:
-        return (lmp_send_flags_t) ((unsigned)flags | (unsigned)LMP_FLAG_SYNC);
-
-    case IDC_CONTROL_CLEAR_SYNC:
-        return (lmp_send_flags_t) ((unsigned)flags & ~(unsigned)LMP_FLAG_SYNC);
-
-    default: // no-op for other control ops
-        return flags;
-    }
-}
 
 /**
  * \brief Get a receiving chanstate of LMP channel
