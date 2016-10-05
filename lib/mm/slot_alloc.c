@@ -27,9 +27,7 @@ static errval_t rootcn_alloc(void *st, size_t reqsize, struct capref *ret)
 /// Allocate a new cnode if needed
 errval_t slot_prealloc_refill(void *this)
 {
-            assert(((struct slot_prealloc*) this)->mm->head->type == 0);
     struct slot_prealloc *sa = this;
-            assert(sa->mm->head->type == 0);
     uint8_t refill = !sa->current;
     static bool is_refilling = false;
     errval_t err;
@@ -37,25 +35,56 @@ errval_t slot_prealloc_refill(void *this)
     if (is_refilling) {
         return SYS_ERR_OK;
     }
-            assert(sa->mm->head->type == 0);
 
     if (sa->meta[refill].free == L2_CNODE_SLOTS) {
         return SYS_ERR_OK; // Nop
     }
-            assert(sa->mm->head->type == 0);
 
     is_refilling = true;
 
     // Allocate a ram cap
-            assert(sa->mm->head->type == 0);
-    struct capref ram_cap;
-            assert(sa->mm->head->type == 0);
-            assert(sa->mm->head->type == 0);
-    err = mm_alloc(sa->mm, OBJSIZE_L2CNODE, &ram_cap);
+    struct capref ram_cap = {
+        .cnode = cnode_base,
+        .slot = 0,
+    };
+    int i;
+    for (i = 0; i < 62; ++i) {
+        err = mm_alloc(sa->mm, OBJSIZE_L2CNODE, &ram_cap);
+        if (err_is_fail(err)) {
+            is_refilling = false;
+            err = err_push(err, MM_ERR_SLOT_MM_ALLOC);
+            goto out;
+        }
+    }
+
+    struct mmnode *node = sa->mm->head;
+    while (node != NULL) {
+        if (node->type != NodeType_Allocated) {
+            // debug_printf("Found free node @ base=%lld and size=%lld", node->base, node->size);
+            node = node->next;
+            continue;
+        }
+        err = mm_free(sa->mm, ram_cap, node->base, node->size);
+        if (err_is_fail(err)) {
+            // printf("ERROR in loop: %d\n\n", err);
+            is_refilling = false;
+            err = err_push(err, MM_ERR_SLOT_MM_ALLOC);
+            goto out;
+        }
+        // debug_printf("Successfully freed @ base=%lld, size=%lld\n\n", node->base, node->size);
+        node = node->next;
+    }
+    err = mm_free(sa->mm, ram_cap, 100 * OBJSIZE_L2CNODE, OBJSIZE_L2CNODE);
     if (err_is_fail(err)) {
-        is_refilling = false;
-        err = err_push(err, MM_ERR_SLOT_MM_ALLOC);
-        goto out;
+        printf("Error freeing unallocated memory: %d\n\n", err);
+    }
+    for (i = 0; i < 62; ++i) {
+        err = mm_alloc(sa->mm, OBJSIZE_L2CNODE, &ram_cap);
+        if (err_is_fail(err)) {
+            is_refilling = false;
+            err = err_push(err, MM_ERR_SLOT_MM_ALLOC);
+            goto out;
+        }
     }
 
     // Retype to and build the next cnode

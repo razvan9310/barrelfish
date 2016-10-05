@@ -58,15 +58,14 @@ errval_t mm_init(struct mm *mm, enum objtype objtype,
     if (slab_refill_func == NULL) {
         slab_refill_func = slab_default_refill;
     }
-    struct slab_allocator slabs;
-    slab_init(&slabs, sizeof(struct mmnode), slab_refill_func);
-    mm->slabs = slabs;
+    slab_init(&mm->slabs, sizeof(struct mmnode), slab_refill_func);
 
     mm->objtype = objtype;
     mm->slot_alloc = slot_alloc_func;
     mm->slot_refill = slot_refill_func;
     mm->slot_alloc_inst = slot_alloc_inst;
-    ((struct slot_prealloc*) mm->slot_alloc_inst)->mm = mm;
+    struct slot_prealloc *sp = (struct slot_prealloc*) slot_alloc_inst;
+    sp->mm = mm;
 
     return SYS_ERR_OK;
 }
@@ -87,20 +86,19 @@ void mm_destroy(struct mm *mm)
  */
 errval_t mm_add(struct mm *mm, struct capref cap, genpaddr_t base, size_t size)
 {
-    struct capinfo info = {
-        .cap = cap,
-        .base = base,
-        .size = size,
-    };
-    struct mmnode node = {
-        .type = NodeType_Free,
-        .cap = info,
-        .base = base,
-        .size = size,
-        .prev = NULL,
-        .next = NULL,
-    };
-    add_node(&mm->head, &node);
+    struct mmnode *node = (struct mmnode*) slab_alloc(&mm->slabs);
+    if (node == NULL) {
+        return LIB_ERR_RAM_ALLOC;
+    }
+    node->cap.cap = cap;
+    node->cap.base = base;
+    node->cap.size = size;
+    node->base = base;
+    node->size = size;
+    node->prev = node->next = NULL;
+    node->type = NodeType_Free;
+
+    add_node(&mm->head, node);
     assert(mm->head != NULL);
 
     return SYS_ERR_OK;
@@ -129,77 +127,71 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
  */
 errval_t mm_alloc(struct mm *mm, size_t size, struct capref *retcap)
 {
-    printf("mm_alloc needs to allocate size=%d\n", size);
-    printf("\n");
-
     struct mmnode *node = mm->head;
     assert(node != NULL);
-    printf("Type of head is %d\n\n", mm->head->type);
     while (size > 0) {
         if (node == NULL) {
             /* We shouldn't allocate over our capacity of nodes. */
             return LIB_ERR_RAM_ALLOC_WRONG_SIZE;
         }
-        printf("Found node of type %d; type free is %d\n\n", node->type, NodeType_Free);
         if (node->type != NodeType_Free) {
             node = node->next;
             continue;
         }
         if (node->size <= size) {
-            printf("node->size <= size\n\n");
             node->type = NodeType_Allocated;
-            struct capinfo info = {
-                .cap = *retcap,
-                .base = node->base,
-                .size = node->size,
-            };
-            node->cap = info;
+            node->cap.cap = *retcap;
+            node->cap.base = node->base;
+            node->cap.size = node->size;
             size -= node->size;
+            // printf("(1) Allocated @ base=%lld, size=%lld\n\n", node->base, node->size);
         } else {
-            /* Node size is larger than we need -- we need to split it into
-               an assigned node and a free one. */
-            size_t remaining = node->size - size;
-            printf("Remaining free memory in node = %d\n\n", remaining);
-            struct capinfo info = {
-                .cap = *retcap,
-                .base = node->cap.base + remaining,
-                .size = size,
-            };
-            struct mmnode new_node = {
-                .type = NodeType_Allocated,
-                .cap = info,
-                .base = node->base + remaining,
-                .size = size,
-                .prev = node,
-                .next = node->next,
-            };
-            node->size = remaining;
-            if (node->next != NULL) {
-                node->next->prev = &new_node;
+            /* Need to split node into allocated & free. */
+            uint64_t remaining = node->size - size;
+            // printf("Current size to alloc is: %d\n\n", size);
+            // printf("Remaining free memory in current node, after alloc: %lld\n\n", remaining);
+            struct mmnode *new_node = (struct mmnode*) slab_alloc(&mm->slabs);
+            new_node->type = NodeType_Allocated;
+            new_node->base = node->base + remaining;
+            new_node->size = size;
+            new_node->cap.cap = *retcap;
+            new_node->cap.base = new_node->base;
+            new_node->cap.size = new_node->size;
+
+            new_node->next = node;
+            new_node->prev = node->prev;
+            if (node->prev != NULL) {
+                node->prev->next = new_node;
             }
-            node->next = &new_node;
+            node->prev = new_node;
+            if (node == mm->head) {
+                mm->head = new_node;
+            }
+
+            node->size = remaining;
             size = 0;
+            // printf("(2) Allocated @ base=%lld, size=%lld\n\n\n", new_node->base, new_node->size);
         }
         node = node->next;
     }
 
-    size_t free_mem = 0;
-    int free_nodes = 0, total_nodes = 0;
-    node = mm->head;
-    while (node != NULL) {
-        printf("Found node type %d of size %d\n\n", node->type, node->size);
-        if (node->type == NodeType_Free) {
-            ++free_nodes;
-            free_mem += node->size;
-        }
-        ++total_nodes;
-        node = node->next;
-    }
+    // size_t free_mem = 0;
+    // int free_nodes = 0, total_nodes = 0;
+    // node = mm->head;
+    // while (node != NULL) {
+    //     printf("Found node type %d of size %d\n\n", node->type, node->size);
+    //     if (node->type == NodeType_Free) {
+    //         ++free_nodes;
+    //         free_mem += node->size;
+    //     }
+    //     ++total_nodes;
+    //     node = node->next;
+    // }
 
-    printf("Successfully allocated\n");
-    printf("Remaining free memory = %d\n", free_mem);
-    printf("%d free nodes out of %d total\n", free_nodes, total_nodes);
-    printf("\n");
+    // printf("Successfully allocated\n");
+    // printf("Remaining free memory = %d\n", free_mem);
+    // printf("%d free nodes out of %d total\n", free_nodes, total_nodes);
+    // printf("\n");
     return SYS_ERR_OK;
     // return LIB_ERR_NOT_IMPLEMENTED;
 }
@@ -214,12 +206,18 @@ errval_t mm_alloc(struct mm *mm, size_t size, struct capref *retcap)
  */
 errval_t mm_free(struct mm *mm, struct capref cap, genpaddr_t base, gensize_t size)
 {
-    // struct mmnode *node = mm->head;
-    // while (node != NULL) {
-    //     if (node->cap.base == base && node->cap.size == size) {
-    //         node->type = NodeType_Free;
-    //     }
-    // }
-    // return SYS_ERR_OK;
-    return LIB_ERR_NOT_IMPLEMENTED;
+    struct mmnode *node = mm->head;
+    while (true) {
+        if (node == NULL) {
+            // printf("NODE IS NULL!! Couldn't find base=%lld, size=%lld\n\n", base, size);
+            return MM_ERR_MM_FREE;
+        }
+        if (node->cap.base == base && node->cap.size == size) {
+            /* No need to compare cap itself, since the MM instance is process
+               specific. */
+            node->type = NodeType_Free;
+            return SYS_ERR_OK;
+        }
+        node = node->next;
+    }
 }
