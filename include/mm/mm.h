@@ -62,6 +62,9 @@ struct mm {
     struct mmnode *head;         ///< Head of doubly-linked list of nodes in order
 };
 
+void add_node(struct mmnode **head, struct mmnode *node);
+void remove_node(struct mmnode **head, struct mmnode *node);
+
 errval_t mm_init(struct mm *mm, enum objtype objtype,
                      slab_refill_func_t slab_refill_func,
                      slot_alloc_t slot_alloc_func,

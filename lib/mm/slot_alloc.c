@@ -19,13 +19,17 @@
 
 static errval_t rootcn_alloc(void *st, size_t reqsize, struct capref *ret)
 {
+    printf("rootcn_alloc for size=%d\n", reqsize);
+    printf("\n");
     return mm_alloc(st, reqsize, ret);
 }
 
 /// Allocate a new cnode if needed
 errval_t slot_prealloc_refill(void *this)
 {
+            assert(((struct slot_prealloc*) this)->mm->head->type == 0);
     struct slot_prealloc *sa = this;
+            assert(sa->mm->head->type == 0);
     uint8_t refill = !sa->current;
     static bool is_refilling = false;
     errval_t err;
@@ -33,15 +37,20 @@ errval_t slot_prealloc_refill(void *this)
     if (is_refilling) {
         return SYS_ERR_OK;
     }
+            assert(sa->mm->head->type == 0);
 
     if (sa->meta[refill].free == L2_CNODE_SLOTS) {
         return SYS_ERR_OK; // Nop
     }
+            assert(sa->mm->head->type == 0);
 
     is_refilling = true;
 
     // Allocate a ram cap
+            assert(sa->mm->head->type == 0);
     struct capref ram_cap;
+            assert(sa->mm->head->type == 0);
+            assert(sa->mm->head->type == 0);
     err = mm_alloc(sa->mm, OBJSIZE_L2CNODE, &ram_cap);
     if (err_is_fail(err)) {
         is_refilling = false;
