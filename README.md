@@ -1,14 +1,18 @@
-This is the repository that contains the handouts for the
-[AOS course](http://www.systems.ethz.ch/courses/fall2016/aos).
+# ETH Advanced Operating System assignments for Barrelfish on ARMv7 Pandaboard. #
 
-Those handouts include
- * Lecture slides
- * Project milestone descriptions
- * Project milestone code handouts
+### Building ###
 
+```
+$ mkdir build && cd build
+$ <path/to/source/tree>/hake/hake.sh -s <path/to/source/tree> -a armv7
+$ make -j7 PandaboardES
+```
 
-Each week's materials will be put into this repository in a branch named weekN
-where N is the number of the week. 
+### Booting via USBBoot ###
 
-See the relevant milestone description (branch weekN, handouts/milestoneX.pdf)
-for detailed instructions on how to use this repository.
+```
+$ sudo make usbboot_panda
+```
+
+### Reference ###
+www.systems.ethz.ch/courses/fall2016/aos
