@@ -168,6 +168,7 @@ errval_t slot_alloc_basecn(void *inst, uint64_t nslots, struct capref *ret)
         struct capref cnode;
         err = slot_alloc_root(&cnode);
         if (err_is_fail(err)) {
+            DEBUG_ERR(err, "allocating root cnode slot");
             return err_push(err, LIB_ERR_SLOT_ALLOC);
         }
 
@@ -178,7 +179,7 @@ errval_t slot_alloc_basecn(void *inst, uint64_t nslots, struct capref *ret)
         }
 
         this->cap.slot = 0;
-        this->free = 1UL << DEFAULT_CNODE_BITS;
+        this->free = L2_CNODE_SLOTS;
     }
 
     assert(nslots <= this->free);

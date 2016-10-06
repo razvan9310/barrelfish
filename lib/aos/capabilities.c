@@ -169,7 +169,6 @@ static errval_t cap_retype_remote(struct capref src_root, struct capref dest_roo
                                   gensize_t objsize, size_t count, capaddr_t to,
                                   capaddr_t slot, int to_level)
 {
-    //USER_PANIC("%s NYI", __FUNCTION__);
     return LIB_ERR_NOT_IMPLEMENTED;
 }
 
@@ -186,7 +185,6 @@ static errval_t cap_retype_remote(struct capref src_root, struct capref dest_roo
  */
 static errval_t cap_delete_remote(struct capref root, capaddr_t src, uint8_t level)
 {
-    //USER_PANIC("%s NYI", __FUNCTION__);
     return LIB_ERR_NOT_IMPLEMENTED;
 }
 
@@ -203,7 +201,6 @@ static errval_t cap_delete_remote(struct capref root, capaddr_t src, uint8_t lev
  */
 static errval_t cap_revoke_remote(struct capref root, capaddr_t src, uint8_t level)
 {
-    //USER_PANIC("%s NYI", __FUNCTION__);
     return LIB_ERR_NOT_IMPLEMENTED;
 }
 

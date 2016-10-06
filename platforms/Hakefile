@@ -66,16 +66,28 @@ let    -- Default list of modules to build/install
 
     platform "VExpressEMM-A15" [ "armv7" ]
     ([ ("armv7", f) | f <- vExpressEMMModules_A15 ] ++
-     [ ("root", "/armv7_a15ve_image"),
-       ("root", "/armv7_a15ve_image-gdb.gdb"),
-       ("root", "/armv7_a15ve_gem5_image"),
-       ("root", "/armv7_a15ve_gem5_image-gdb.gdb") ])
-    "VersatileExpress EMM board with ARM Cortex-A15s under GEM5",
+     [ ("root", "/armv7_a15ve_1_image"),
+       ("root", "/armv7_a15ve_1_image-gdb.gdb"),
+       ("root", "/armv7_a15ve_fvp_1_image"),
+       ("root", "/armv7_a15ve_fvp_1_image-gdb.gdb"),
+       ("root", "/armv7_a15ve_4_image"),
+       ("root", "/armv7_a15ve_4_image-gdb.gdb"),
+       ("root", "/armv7_a15ve_fvp_4_image"),
+       ("root", "/armv7_a15ve_fvp_4_image-gdb.gdb") ])
+    "VersatileExpress EMM board with ARM Cortex-A15s",
+
+    platform "VExpressEMM-A15-A7" [ "armv7" ]
+    ([ ("armv7", f) | f <- vExpressEMMModules_A15 ] ++
+     [ ("root", "/armv7_a15a7ve_image"),
+       ("root", "/armv7_a15a7ve_image-gdb.gdb") ])
+    "VersatileExpress EMM board with ARM Cortex-A15s and A7s",
 
     platform "VExpressEMM-A9" [ "armv7" ]
     ([ ("armv7", f) | f <- vExpressEMMModules_A9 ] ++
-     [ ("root", "/armv7_a9ve_image"),
-       ("root", "/armv7_a9ve_image-gdb.gdb") ])
+     [ ("root", "/armv7_a9ve_1_image"),
+       ("root", "/armv7_a9ve_1_image-gdb.gdb"),
+       ("root", "/armv7_a9ve_4_image"),
+       ("root", "/armv7_a9ve_4_image-gdb.gdb") ])
     "VersatileExpress EMM board for ARMv7-A Fixed Virtual Platforms",
 
     --
@@ -89,15 +101,29 @@ let    -- Default list of modules to build/install
     -- Build the default PandaBoard boot image
     armv7Image "armv7_omap44xx" "omap44xx" "omap44xx" "0x80000000" pandaModules,
 
-    -- Build the A15 simulation image (VersatileExpress EMM board)
-    armv7Image "armv7_a15ve" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
+    -- Build the A15 simulation image (VersatileExpress EMM board, 1 core)
+    armv7Image "armv7_a15ve_1" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
 
-    -- Build the A15 simulation image (VersatileExpress EMM board, with GEM5
+    -- Build the A15 simulation image (VersatileExpress EMM board, 1 core, FVP
     -- quirks)
-    armv7Image "armv7_a15ve_gem5" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
+    armv7Image "armv7_a15ve_fvp_1" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
 
-    -- Build the A9 simulation image (VersatileExpress EMM board)
-    armv7Image "armv7_a9ve" "ve" "a15ve" "0x80000000" vExpressEMMModules_A9,
+    -- Build the A15 simulation image (VersatileExpress EMM board, 4 cores)
+    armv7Image "armv7_a15ve_4" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
+
+    -- Build the A15 simulation image (VersatileExpress EMM board, 4 cores,
+    -- FVP quirks)
+    armv7Image "armv7_a15ve_fvp_4" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
+
+    -- Build the big.LITTLE A15/A7 simulation image (VersatileExpress EMM
+    -- board, 4+4 cores)
+    armv7Image "armv7_a15a7ve" "ve" "a15ve" "0x80000000" vExpressEMMModules_A15,
+
+    -- Build the A9 simulation image (VersatileExpress EMM board, 1 core)
+    armv7Image "armv7_a9ve_1" "ve" "a9ve" "0x80000000" vExpressEMMModules_A9,
+
+    -- Build the A9 simulation image (VersatileExpress EMM board, 4 cores)
+    armv7Image "armv7_a9ve_4" "ve" "a9ve" "0x80000000" vExpressEMMModules_A9,
 
     --
     -- Booting: various targets for booting Barrelfish under different circumstances
@@ -106,33 +132,49 @@ let    -- Default list of modules to build/install
     -- Copy menu.list files across
     Rules [ copyFile SrcTree "root" ("/hake/menu.lst." ++ p)
                      "root" ("/platforms/arm/menu.lst." ++ p)
-            | p <- [ "armv7_a9ve",
-                     "armv7_a15ve",
-                     "armv7_a15ve_gem5",
+            | p <- [ "armv7_a9ve_1",
+                     "armv7_a9ve_4",
+                     "armv7_a15ve_1",
+                     "armv7_a15ve_4",
+                     "armv7_a15ve_fvp_1",
+                     "armv7_a15ve_fvp_4",
+                     "armv7_a15a7ve",
                      "armv7_omap44xx",
                      "armv7_aos_m0" ]],
 
-    boot "gem5_armv7_vexpressemm" [ "armv7" ] [
-      In SrcTree "tools" "/tools/arm_gem5/boot_gem5.sh",
-      Str "VExpress_EMM",
-      In BuildTree "root" "/armv7_a15ve_gem5_image" ]
-    "Boot an ARMv7a multicore image on a VersatileExpress EMM board in GEM5",
+    boot "FVP_VE_A5x1" [ "armv7" ] [
+      Str "FVP_VE_Cortex-A5x1",
+      In BuildTree "root" "/armv7_a9ve_1_image" ]
+    "Boot on a single-core Cortex-A5 FVP model",
+
+    boot "FVP_VE_A7x1" [ "armv7" ] [
+      Str "FVP_VE_Cortex-A7x1",
+      In BuildTree "root" "/armv7_a15ve_fvp_1_image" ]
+    "Boot on a single-core Cortex-A7 FVP model",
 
     boot "FVP_VE_A9x1" [ "armv7" ] [
       Str "FVP_VE_Cortex-A9x1",
-      In BuildTree "root" "/armv7_a9ve_image" ]
+      In BuildTree "root" "/armv7_a9ve_1_image" ]
     "Boot on a single-core Cortex-A9 FVP model",
 
     boot "FVP_VE_A9x4" [ "armv7" ] [
       Str "FVP_VE_Cortex-A9x4",
-      In BuildTree "root" "/armv7_a9ve_image" ]
+      In BuildTree "root" "/armv7_a9ve_4_image" ]
     "Boot on a four-core Cortex-A9 FVP model",
 
-    boot "qemu_a15ve" [ "armv7" ] [
+    boot "qemu_a15ve_1" [ "armv7" ] [
       In SrcTree "tools" "/tools/qemu-wrapper.sh",
-      Str "--image", In BuildTree "root" "/armv7_a15ve_image",
-      Str "--arch", Str "a15ve" ]
-    "Boot QEMU in 32-bit ARM mode emulating a Versatile Express board",
+      Str "--image", In BuildTree "root" "/armv7_a15ve_1_image",
+      Str "--arch", Str "a15ve",
+      Str "--smp", Str "1" ]
+    "Boot QEMU in 32-bit ARM mode emulating a Versatile Express board (1 core)",
+
+    boot "qemu_a15ve_4" [ "armv7" ] [
+      In SrcTree "tools" "/tools/qemu-wrapper.sh",
+      Str "--image", In BuildTree "root" "/armv7_a15ve_4_image",
+      Str "--arch", Str "a15ve",
+      Str "--smp", Str "4" ]
+    "Boot QEMU in 32-bit ARM mode emulating a Versatile Express board (4 cores)",
 
     boot "usbboot_panda" [ "armv7" ] [
       In BuildTree "tools" "/bin/usbboot",
