@@ -333,7 +333,7 @@ let
      target = "aos_m0",
      driverType = "aos",
      architectures = [ "armv7" ],
-     assemblyFiles = [ "arch/armv7/cpu_entry.S",
+     assemblyFiles = [ "arch/armv7/cpu_start.S",
                        "arch/armv7/aos/exceptions.S" ],
      cFiles = [ 
                 "arch/armv7/aos/init.c",
