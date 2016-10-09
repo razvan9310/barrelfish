@@ -82,12 +82,6 @@ errval_t initialize_ram_alloc(void)
                 DEBUG_ERR(err, "Warning: adding RAM region %d (%p/%zu) FAILED", i, bi->regions[i].mr_base, bi->regions[i].mr_bytes);
             }
 
-<<<<<<< HEAD
-            // printf("Between mm_add and slot_prealloc_refill\n\n");
-
-=======
-            assert(((struct slot_prealloc*) aos_mm.slot_alloc_inst)->mm->head->type == 0);
->>>>>>> f5fad2d19d7052f792ec7984bc54f2872fcf3199
             err = slot_prealloc_refill(aos_mm.slot_alloc_inst);
             if (err_is_fail(err) && err_no(err) != MM_ERR_SLOT_MM_ALLOC) {
                 DEBUG_ERR(err, "in slot_prealloc_refill() while initialising"
