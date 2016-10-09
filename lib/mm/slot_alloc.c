@@ -19,6 +19,8 @@
 
 static errval_t rootcn_alloc(void *st, size_t reqsize, struct capref *ret)
 {
+    printf("rootcn_alloc for size=%d\n", reqsize);
+    printf("\n");
     return mm_alloc(st, reqsize, ret);
 }
 
@@ -41,12 +43,48 @@ errval_t slot_prealloc_refill(void *this)
     is_refilling = true;
 
     // Allocate a ram cap
-    struct capref ram_cap;
-    err = mm_alloc(sa->mm, OBJSIZE_L2CNODE, &ram_cap);
+    struct capref ram_cap = {
+        .cnode = cnode_base,
+        .slot = 0,
+    };
+    int i;
+    for (i = 0; i < 62; ++i) {
+        err = mm_alloc(sa->mm, OBJSIZE_L2CNODE, &ram_cap);
+        if (err_is_fail(err)) {
+            is_refilling = false;
+            err = err_push(err, MM_ERR_SLOT_MM_ALLOC);
+            goto out;
+        }
+    }
+
+    struct mmnode *node = sa->mm->head;
+    while (node != NULL) {
+        if (node->type != NodeType_Allocated) {
+            // debug_printf("Found free node @ base=%lld and size=%lld", node->base, node->size);
+            node = node->next;
+            continue;
+        }
+        err = mm_free(sa->mm, ram_cap, node->base, node->size);
+        if (err_is_fail(err)) {
+            // printf("ERROR in loop: %d\n\n", err);
+            is_refilling = false;
+            err = err_push(err, MM_ERR_SLOT_MM_ALLOC);
+            goto out;
+        }
+        // debug_printf("Successfully freed @ base=%lld, size=%lld\n\n", node->base, node->size);
+        node = node->next;
+    }
+    err = mm_free(sa->mm, ram_cap, 100 * OBJSIZE_L2CNODE, OBJSIZE_L2CNODE);
     if (err_is_fail(err)) {
-        is_refilling = false;
-        err = err_push(err, MM_ERR_SLOT_MM_ALLOC);
-        goto out;
+        printf("Error freeing unallocated memory: %d\n\n", err);
+    }
+    for (i = 0; i < 62; ++i) {
+        err = mm_alloc(sa->mm, OBJSIZE_L2CNODE, &ram_cap);
+        if (err_is_fail(err)) {
+            is_refilling = false;
+            err = err_push(err, MM_ERR_SLOT_MM_ALLOC);
+            goto out;
+        }
     }
 
     // Retype to and build the next cnode
