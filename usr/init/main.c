@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <aos/aos.h>
 #include <aos/waitset.h>
@@ -45,6 +46,17 @@ int main(int argc, char *argv[])
     bi = (struct bootinfo*)strtol(argv[1], NULL, 10);
     if (!bi) {
         assert(my_core_id > 0);
+    }
+
+    /* Initialize paging. */
+    err = paging_init();
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "paging_init");
+    }
+    /* Initialize the default slot allocator. */
+    err = slot_alloc_init();
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "slot_alloc_init");
     }
 
     err = initialize_ram_alloc();

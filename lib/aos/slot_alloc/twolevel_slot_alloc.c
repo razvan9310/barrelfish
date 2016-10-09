@@ -117,6 +117,7 @@ errval_t two_level_alloc(struct slot_allocator *ca, struct capref *ret)
         size_t bufsize = mca->slab.blocksize - sizeof(struct slot_allocator_list);
 
         // Allocator
+        assert(&mca->reserve->a != NULL);
         err = single_slot_alloc_init_raw(&mca->reserve->a, cap, cnode,
                                          mca->a.nslots, buf, bufsize);
         if (err_is_fail(err)) {

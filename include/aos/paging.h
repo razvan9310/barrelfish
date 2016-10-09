@@ -48,6 +48,11 @@ typedef int paging_flags_t;
 struct paging_state {
     struct slot_allocator* slot_alloc;
     // TODO: add struct members to keep track of the page tables etc
+    lvaddr_t next_addr;
+    struct l2_pagetable {
+        struct capref cap;
+        bool initialized;
+    } l2_pagetables[1 << 12];
 };
 
 
@@ -97,6 +102,8 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes);
 errval_t paging_map_frame_attr(struct paging_state *st, void **buf,
                     size_t bytes, struct capref frame,
                     int flags, void *arg1, void *arg2);
+//// Return a pointer to a base page size memory area.
+void *alloc_page_size(struct capref frame);
 /// Map user provided frame at user provided VA with given flags.
 errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                 struct capref frame, size_t bytes, int flags);

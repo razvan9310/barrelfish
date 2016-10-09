@@ -396,7 +396,6 @@ errval_t cnode_create_from_mem(struct capref dest, struct capref src,
         return LIB_ERR_CNODE_TYPE;
     }
 
-
     // Retype it to the destination
     err = cap_retype(dest, src, 0, cntype, slots * OBJSIZE_CTE, 1);
     if (err_is_fail(err)) {
@@ -406,7 +405,6 @@ errval_t cnode_create_from_mem(struct capref dest, struct capref src,
     // Construct the cnoderef to return
     if (cnoderef != NULL) {
         enum cnode_type ref_cntype = cntype == ObjType_L1CNode ? CNODE_TYPE_ROOT : CNODE_TYPE_OTHER;
-        // debug_printf("building cnoderef for objtype = %d, cntype = %d\n", cntype, ref_cntype);
         *cnoderef = build_cnoderef(dest, ref_cntype);
     }
 

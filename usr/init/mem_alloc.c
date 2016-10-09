@@ -68,14 +68,21 @@ errval_t initialize_ram_alloc(void)
         .slot = 0,
     };
 
+    genpaddr_t base = 0;
     for (int i = 0; i < bi->regions_length; i++) {
         if (bi->regions[i].mr_type == RegionType_Empty) {
+            // printf("Before mm_add\n\n");
             err = mm_add(&aos_mm, mem_cap, bi->regions[i].mr_base, bi->regions[i].mr_bytes);
             if (err_is_ok(err)) {
+                if (base == 0) {
+                    base = bi->regions[i].mr_base;
+                }
                 mem_avail += bi->regions[i].mr_bytes;
             } else {
                 DEBUG_ERR(err, "Warning: adding RAM region %d (%p/%zu) FAILED", i, bi->regions[i].mr_base, bi->regions[i].mr_bytes);
             }
+
+            // printf("Between mm_add and slot_prealloc_refill\n\n");
 
             err = slot_prealloc_refill(aos_mm.slot_alloc_inst);
             if (err_is_fail(err) && err_no(err) != MM_ERR_SLOT_MM_ALLOC) {
@@ -94,6 +101,38 @@ errval_t initialize_ram_alloc(void)
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_RAM_ALLOC_SET);
     }
+
+    /* Testing. */
+    int i;
+    for (i = 1; i <= 600; ++i) {
+        struct capref frame;
+        mm_alloc(&aos_mm, BASE_PAGE_SIZE, &frame);
+        if (i > 0 && i % 50 == 0) {
+            printf("Successfully allocated %i frames of size %u\n", i, BASE_PAGE_SIZE);
+        }
+    }
+
+    /* Test mapping frames to vspace. */
+    /* Create a 4kB (page-size) frame. */
+    struct capref frame;
+    size_t retsize;
+    frame_alloc(&frame, BASE_PAGE_SIZE, &retsize);
+    void *buff = alloc_page_size(frame);
+    if (buff == NULL) {
+        return 1;
+    }
+    
+    char *cbuff = (char*) buff;
+    const char *hello_msg = "Hello, AOS ;)";
+    for (i = 0; i < strlen(hello_msg); ++i) {
+        cbuff[i] = hello_msg[i];
+    }
+    for (i = 0; i < strlen(hello_msg); ++i) {
+        printf("%c", cbuff[i]);
+    }
+    printf("\n");
+
+    mm_destroy(&aos_mm);
 
     return SYS_ERR_OK;
 }

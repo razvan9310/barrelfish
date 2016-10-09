@@ -69,6 +69,13 @@ errval_t paging_init(void)
     // TIP: it might be a good idea to call paging_init_state() from here to
     // avoid code duplication.
     set_current_paging_state(&current);
+    current.slot_alloc = get_default_slot_allocator();
+    current.next_addr = 0x00001000;
+    size_t i;
+    for (i = 0; i < (1 << 12); ++i) {
+        current.l2_pagetables[i].initialized = false;
+    }
+
     return SYS_ERR_OK;
 }
 
@@ -174,6 +181,18 @@ slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref frame, size
     return SYS_ERR_OK;
 }
 
+void *alloc_page_size(struct capref frame) {
+    lvaddr_t return_addr = current.next_addr;
+    errval_t err = paging_map_fixed_attr(&current, return_addr, frame,
+        BASE_PAGE_SIZE, VREGION_FLAGS_READ_WRITE);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "paging_map_fixed_attr");
+        return NULL;
+    }
+    current.next_addr += BASE_PAGE_SIZE;
+    return (void*) return_addr;
+}
+
 /**
  * \brief map a user provided frame at user provided VA.
  * TODO(M1): Map a frame assuming all mappings will fit into one L2 pt
@@ -182,7 +201,45 @@ slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref frame, size
 errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
         struct capref frame, size_t bytes, int flags)
 {
-    return SYS_ERR_OK;
+    /* Step 1: Create L1 pagetable. */
+    struct capref l1_pt = {
+        .cnode = cnode_page,
+        .slot = 0,
+    };
+
+    /* Step 2: Create L2 pagetable. */
+    struct capref l2_pt;
+    lvaddr_t l1_index = ARM_L1_OFFSET(vaddr);
+    errval_t err;
+    if (st->l2_pagetables[l1_index].initialized) {
+        l2_pt = st->l2_pagetables[l1_index].cap;
+    } else {
+        err = arml2_alloc(st, &l2_pt);
+        if (err_is_fail(err)) {
+            return err;
+        }
+
+        /* Step 3: Map L2 to L1 using given "vaddr". */
+        struct capref l2_to_l1;
+        st->slot_alloc->alloc(st->slot_alloc, &l2_to_l1);
+        err = vnode_map(l1_pt, l2_pt, l1_index, VREGION_FLAGS_READ_WRITE, 0, 1,
+            l2_to_l1);
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "Mapping L2 to L1");
+            return err;
+        }
+        st->l2_pagetables[l1_index].cap = l2_pt;
+        st->l2_pagetables[l1_index].initialized = true;
+    }
+
+    /* Step 4: Map frame to L2 using given "vaddr". */
+    struct capref frame_to_l2;
+    st->slot_alloc->alloc(st->slot_alloc, &frame_to_l2);
+    err = vnode_map(l2_pt, frame, ARM_L2_OFFSET(vaddr), flags, 0, 1,frame_to_l2);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "Mapping frame to L2");
+    }
+    return err;
 }
 
 /**
