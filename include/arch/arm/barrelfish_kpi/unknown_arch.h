@@ -38,7 +38,7 @@ static inline void cache_flush_range(void *base, size_t len)
 static inline uint64_t rdtsc(void)
 {
     /* XXX - only the lower 32 bits - the interface needs to be improved. */
-    uint32_t timestamp;
+    uintptr_t timestamp;
     errval_t err= sys_debug_hardware_timer_read(&timestamp);
     (void)err;
     assert(err_is_ok(err));
