@@ -56,7 +56,7 @@ void merge_nodes(struct mm *mm, struct mmnode *fst, struct mmnode *snd)
 
 void *mm_slab_alloc(struct mm *mm)
 {
-    if (slab_freecount(&mm->slabs) < 3 && !mm->slab_refilling) {
+    if (slab_freecount(&mm->slabs) < 6 && !mm->slab_refilling) {
         if (!mm->slabs.refill_func) {
             return NULL;
         }
@@ -76,7 +76,7 @@ void *mm_slab_alloc(struct mm *mm)
 errval_t mm_slot_alloc(struct mm *mm, uint64_t nslots, struct capref *retcap)
 {
     struct slot_prealloc* sa = (struct slot_prealloc*) mm->slot_alloc_inst;
-    if (sa->meta[sa->current].free < 3 && sa->meta[!sa->current].free < 3 && !mm->slot_refilling) {
+    if (sa->meta[sa->current].free < 6 && sa->meta[!sa->current].free < 6 && !mm->slot_refilling) {
         /* Need to refill slots. */
         if (mm->slot_refill == NULL) {
             return MM_ERR_SLOT_MM_ALLOC;

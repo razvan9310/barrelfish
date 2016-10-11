@@ -125,6 +125,7 @@ errval_t initialize_ram_alloc(void)
     for (i = 0; i < strlen(hello_msg); ++i) {
         cbuff[i] = hello_msg[i];
     }
+    sys_debug_flush_cache();
     for (i = 0; i < strlen(hello_msg); ++i) {
         printf("%c", cbuff[i]);
     }
