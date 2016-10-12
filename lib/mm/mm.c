@@ -138,8 +138,6 @@ void mm_destroy(struct mm *mm)
     }
 }
 
-
-
 /**
  * Adds a capability to the memory manager.
  *

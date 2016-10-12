@@ -50,7 +50,6 @@ void slab_init(struct slab_allocator *slabs, size_t blocksize,
  */
 void slab_grow(struct slab_allocator *slabs, void *buf, size_t buflen)
 {
-    // void *original_buf = buf;
     /* setup slab_head structure at top of buffer */
     assert(buflen > sizeof(struct slab_head));
     struct slab_head *head = buf;
@@ -182,10 +181,10 @@ static errval_t slab_refill_pages(struct slab_allocator *slabs, size_t bytes)
     struct capref frame;
     size_t retsize;
     frame_alloc(&frame, bytes, &retsize);
-    void *buf = alloc_page_size(frame);
-    if (buf == NULL) {
-        return LIB_ERR_RAM_ALLOC;
-    }
+
+    void *buf;
+    paging_map_frame(get_current_paging_state(), &buf, bytes, frame, NULL, NULL);
+
     slab_grow(slabs, buf, bytes);
     return SYS_ERR_OK;
 }

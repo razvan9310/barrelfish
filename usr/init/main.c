@@ -48,15 +48,15 @@ int main(int argc, char *argv[])
         assert(my_core_id > 0);
     }
 
-    /* Initialize paging. */
-    err = paging_init();
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "paging_init");
-    }
     /* Initialize the default slot allocator. */
     err = slot_alloc_init();
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "slot_alloc_init");
+    }
+    /* Initialize paging. */
+    err = paging_init();
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "paging_init");
     }
 
     err = initialize_ram_alloc();

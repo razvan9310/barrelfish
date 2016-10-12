@@ -32,6 +32,7 @@ errval_t aos_ram_free(struct capref cap, size_t bytes)
  */
 errval_t initialize_ram_alloc(void)
 {
+    debug_printf("initialize_ram_alloc\n");
     errval_t err;
 
     // Init slot allocator
@@ -114,13 +115,16 @@ errval_t initialize_ram_alloc(void)
     /* Create a 4kB (page-size) frame. */
     struct capref frame;
     size_t retsize;
-    frame_alloc(&frame, BASE_PAGE_SIZE, &retsize);
-    void *buff = alloc_page_size(frame);
+    frame_alloc(&frame, 2 * BASE_PAGE_SIZE, &retsize);
+    void *buff;
+    paging_map_frame(get_current_paging_state(), &buff, 2 * BASE_PAGE_SIZE,
+                     frame, NULL, NULL);
     if (buff == NULL) {
         return 1;
     }
     
     char *cbuff = (char*) buff;
+    cbuff = cbuff + 5000;
     const char *hello_msg = "Hello, AOS ;)";
     for (i = 0; i < strlen(hello_msg); ++i) {
         cbuff[i] = hello_msg[i];

@@ -44,17 +44,39 @@ typedef int paging_flags_t;
 #define VREGION_FLAGS_READ_WRITE_MPB \
     (VREGION_FLAGS_READ | VREGION_FLAGS_WRITE | VREGION_FLAGS_MPB)
 
+#define L1_PAGETABLE_ENTRIES 12
+
+enum nodetype {
+    NodeType_Free,     ///< This vregion is free.
+    NodeType_Allocated ///< This vregion has been allocated.
+};
+
+// Metadata about {free, allocated} vregions.
+struct paging_node {
+    lvaddr_t base;       ///< Start of this vregion area.
+    size_t size;         ///< Size of this vregion area.
+    enum nodetype type;  ///< Type of this vregion area in {free, allocated}.
+
+    struct paging_node* prev;
+    struct paging_node* next;
+};
+
 // struct to store the paging status of a process
 struct paging_state {
     struct slot_allocator* slot_alloc;
     // TODO: add struct members to keep track of the page tables etc
-    lvaddr_t next_addr;
     struct l2_pagetable {
         struct capref cap;
         bool initialized;
     } l2_pagetables[1 << 12];
-};
 
+    // List of vregion metadata.
+    struct paging_node* head;
+    // Slabs for paging_node's.
+    struct slab_allocator slabs;
+    // Whether slabs are being refilled.
+    bool slab_refilling;
+};
 
 struct thread;
 /// Initialize paging_state struct
@@ -90,6 +112,8 @@ errval_t paging_region_map(struct paging_region *pr, size_t req_size,
  */
 errval_t paging_region_unmap(struct paging_region *pr, lvaddr_t base, size_t bytes);
 
+bool should_refill_slabs(struct paging_state *st);
+
 /**
  * \brief Find a bit of free virtual address space that is large enough to
  *        accomodate a buffer of size `bytes`.
@@ -103,9 +127,6 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes);
 errval_t paging_map_frame_attr(struct paging_state *st, void **buf,
                                size_t bytes, struct capref frame,
                                int flags, void *arg1, void *arg2);
-
-//// Return a pointer to a base page size memory area.
-void *alloc_page_size(struct capref frame);
 
 /// Map user provided frame at user provided VA with given flags.
 errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
