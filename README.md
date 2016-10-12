@@ -1,4 +1,4 @@
-# ETH Advanced Operating System assignments for Barrelfish on ARMv7 Pandaboard. #
+# ETH Advanced Operating System assignments for Barrelfish on ARMv7 Pandaboard #
 
 ### Building ###
 

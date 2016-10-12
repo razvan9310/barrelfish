@@ -293,6 +293,8 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
             // Get index frame should start at in current L2 table.
             uint32_t frame_index = ARM_L2_OFFSET(vaddr);
 
+            // TODO: Do we need this for-loop? Can we try mapping the whole
+            //       frame in one go?
             for (int i = frame_index; i < ARM_L2_MAX_ENTRIES && bytes > 0; ++i) {
                 struct capref cap_to_map;
                 st->slot_alloc->alloc(st->slot_alloc, &cap_to_map);
