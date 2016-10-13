@@ -234,8 +234,6 @@ slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref frame, size
 errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
         struct capref frame, size_t bytes, int flags)
 {
-    size_t original_bytes = bytes;
-    lvaddr_t original_vaddr = vaddr;
     /* Step 1: Check if the virtual memory area wanted by the user is in fact
                free (check corresponding page_node). */
     struct paging_node *node = st->head;
@@ -254,6 +252,44 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
             continue;
         }
 
+        /* Step 2: Mark node as allocated & split t. */
+        // TODO: If further steps fail and this function returns without success
+        //       we should free the node & merge it back.
+        node->type = NodeType_Allocated;
+        if (node->base + node->size > vaddr + bytes) {
+            // Need new (free) node to the right;
+            struct paging_node *right = (struct paging_node*) slab_alloc(&st->slabs);
+            right->type = NodeType_Free;
+            right->base = vaddr + bytes;
+            right->size = node->size - (vaddr - node->base) - bytes;
+            right->next = node->next;
+            right->prev = node;
+            if (node->next != NULL) {
+                node->next->prev = right;
+            }
+            node->next = right;
+            node->size -= right->size;
+        }
+
+        if (vaddr > node->base) {
+            // Need new (free) node to the left.
+            struct paging_node *left = (struct paging_node*) slab_alloc(&st->slabs);
+            left->type = NodeType_Free;
+            left->base = node->base;
+            left->size = vaddr - node->base;
+            left->next = node;
+            left->prev = node->prev;
+            if (node->prev != NULL) {
+                node->prev->next = left;
+            }
+            if (st->head == node) {
+                st->head = left;
+            }
+            node->prev = left;
+            node->base = vaddr;
+            node->size -= left->size;
+        }
+
         /* Step 2: Get reference to L1 pagetable. */
         struct capref l1_cap = {
             .cnode = cnode_page,
@@ -268,6 +304,7 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
             struct capref l2_cap;
             // Get index of next L2 pagetable to map into.
             uint16_t l2_index = ARM_L1_OFFSET(vaddr);
+
             if (st->l2_pagetables[l2_index].initialized) {
                 l2_cap = st->l2_pagetables[l2_index].cap;
             } else {
@@ -291,79 +328,34 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
             }
 
             // Get index frame should start at in current L2 table.
-            uint32_t frame_index = ARM_L2_OFFSET(vaddr);
+            uint16_t frame_index = ARM_L2_OFFSET(vaddr);
+            uint16_t l2_entries_left = ARM_L2_MAX_ENTRIES - frame_index;
+            size_t size_to_map = (bytes < l2_entries_left * BASE_PAGE_SIZE)
+                    ? bytes
+                    : l2_entries_left * BASE_PAGE_SIZE;
 
-            // TODO: Do we need this for-loop? Can we try mapping the whole
-            //       frame in one go?
-            for (int i = frame_index; i < ARM_L2_MAX_ENTRIES && bytes > 0; ++i) {
-                struct capref cap_to_map;
-                st->slot_alloc->alloc(st->slot_alloc, &cap_to_map);
-                size_t size_to_map = (bytes < BASE_PAGE_SIZE) ? bytes : BASE_PAGE_SIZE;
-
-                err = cap_retype(cap_to_map,
-                        frame,
-                        mapped_size,
-                        ObjType_Frame,
-                        size_to_map,
-                        1);
-                if (err_is_fail(err)) {
-                    DEBUG_ERR(err, "Splitting frame cap");
-                    return err;
-                }
-
-                /* Step 4: Perform mapping. */
-                struct capref frame_to_l2;
-                st->slot_alloc->alloc(st->slot_alloc, &frame_to_l2);
-                err = vnode_map(l2_cap, cap_to_map, i, flags, 0, 1, frame_to_l2);
-                if (err_is_fail(err)) {
-                    DEBUG_ERR(err, "Mapping frame to L2");
-                    return err;
-                }
-
-                mapped_size += size_to_map;
-                bytes -= size_to_map;
-                vaddr += size_to_map;
+            /* Step 4: Perform mapping. */
+            struct capref frame_to_l2;
+            st->slot_alloc->alloc(st->slot_alloc, &frame_to_l2);
+            err = vnode_map(l2_cap,
+                    frame/*cap_to_map*/,
+                    frame_index,
+                    flags,
+                    mapped_size,
+                    size_to_map / BASE_PAGE_SIZE,
+                    frame_to_l2);
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "Mapping frame to L2");
+                return err;
             }
+
+            mapped_size += size_to_map;
+            bytes -= size_to_map;
+            vaddr += size_to_map;
         }
         if (bytes > 0) {
             node = node->next;
         }
-    }
-
-    node->type = NodeType_Allocated;
-    if (node->base + node->size > original_vaddr + original_bytes) {
-        // Need new (free) node to the right;
-        struct paging_node *right = (struct paging_node*) slab_alloc(&st->slabs);
-        right->type = NodeType_Free;
-        right->base = original_vaddr + original_bytes;
-        right->size = node->size - (original_vaddr - node->base)
-                - original_bytes;
-        right->next = node->next;
-        right->prev = node;
-        if (node->next != NULL) {
-            node->next->prev = right;
-        }
-        node->next = right;
-        node->size -= right->size;
-    }
-
-    if (original_vaddr > node->base) {
-        // Need new (free) node to the left.
-        struct paging_node *left = (struct paging_node*) slab_alloc(&st->slabs);
-        left->type = NodeType_Free;
-        left->base = node->base;
-        left->size = original_vaddr - node->base;
-        left->next = node;
-        left->prev = node->prev;
-        if (node->prev != NULL) {
-            node->prev->next = left;
-        }
-        if (st->head == node) {
-            st->head = left;
-        }
-        node->prev = left;
-        node->base = original_vaddr;
-        node->size -= left->size;
     }
 
     return SYS_ERR_OK;

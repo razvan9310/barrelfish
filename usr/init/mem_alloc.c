@@ -112,25 +112,53 @@ errval_t initialize_ram_alloc(void)
     }
 
     /* Test mapping frames to vspace. */
-    /* Create a 4kB (page-size) frame. */
+    /* Create a 64MB frame. */
     struct capref frame;
     size_t retsize;
-    frame_alloc(&frame, 2 * BASE_PAGE_SIZE, &retsize);
+    frame_alloc(&frame, 64 * 1024 * 1024u, &retsize);
     void *buff;
-    paging_map_frame(get_current_paging_state(), &buff, 2 * BASE_PAGE_SIZE,
+    paging_map_frame(get_current_paging_state(), &buff, 64 * 1024 * 1024u,
                      frame, NULL, NULL);
     if (buff == NULL) {
         return 1;
     }
     
     char *cbuff = (char*) buff;
-    cbuff = cbuff + 5000;
-    const char *hello_msg = "Hello, AOS ;)";
-    for (i = 0; i < strlen(hello_msg); ++i) {
-        cbuff[i] = hello_msg[i];
+    for (i = 0; i < 16; ++i) {
+        cbuff[i] = 'x';
     }
     sys_debug_flush_cache();
-    for (i = 0; i < strlen(hello_msg); ++i) {
+    for (i = 0; i < 16; ++i) {
+        printf("%c", cbuff[i]);
+    }
+    printf("\n");
+
+    cbuff += 16 * 1024 * 1024;
+    for (i = 0; i < 16; ++i) {
+        cbuff[i] = 'y';
+    }
+    sys_debug_flush_cache();
+    for (i = 0; i < 16; ++i) {
+        printf("%c", cbuff[i]);
+    }
+    printf("\n");
+    
+    cbuff += 16 * 1024 * 1024;
+    for (i = 0; i < 16; ++i) {
+        cbuff[i] = 'z';
+    }
+    sys_debug_flush_cache();
+    for (i = 0; i < 16; ++i) {
+        printf("%c", cbuff[i]);
+    }
+    printf("\n");
+
+    cbuff += 16 * 1024 * 1024;
+    for (i = 0; i < 16; ++i) {
+        cbuff[i] = 't';
+    }
+    sys_debug_flush_cache();
+    for (i = 0; i < 16; ++i) {
         printf("%c", cbuff[i]);
     }
     printf("\n");
