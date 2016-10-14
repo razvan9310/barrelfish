@@ -102,68 +102,68 @@ errval_t initialize_ram_alloc(void)
     }
 
     /* Testing. */
-    int i;
-    for (i = 1; i <= 600; ++i) {
-        struct capref frame;
-        mm_alloc(&aos_mm, BASE_PAGE_SIZE, &frame);
-        if (i > 0 && i % 50 == 0) {
-            printf("Successfully allocated %i frames of size %u\n", i, BASE_PAGE_SIZE);
-        }
-    }
+    // int i;
+    // for (i = 1; i <= 600; ++i) {
+    //     struct capref frame;
+    //     mm_alloc(&aos_mm, BASE_PAGE_SIZE, &frame);
+    //     if (i > 0 && i % 50 == 0) {
+    //         printf("Successfully allocated %i frames of size %u\n", i, BASE_PAGE_SIZE);
+    //     }
+    // }
 
-    /* Test mapping frames to vspace. */
-    /* Create a 64MB frame. */
-    struct capref frame;
-    size_t retsize;
-    frame_alloc(&frame, 64 * 1024 * 1024u, &retsize);
-    void *buff;
-    paging_map_frame(get_current_paging_state(), &buff, 64 * 1024 * 1024u,
-                     frame, NULL, NULL);
-    if (buff == NULL) {
-        return 1;
-    }
+    // /* Test mapping frames to vspace. */
+    // /* Create a 64MB frame. */
+    // struct capref frame;
+    // size_t retsize;
+    // frame_alloc(&frame, 64 * 1024 * 1024u, &retsize);
+    // void *buff;
+    // paging_map_frame(get_current_paging_state(), &buff, 64 * 1024 * 1024u,
+    //                  frame, NULL, NULL);
+    // if (buff == NULL) {
+    //     return 1;
+    // }
     
-    char *cbuff = (char*) buff;
-    for (i = 0; i < 16; ++i) {
-        cbuff[i] = 'x';
-    }
-    sys_debug_flush_cache();
-    for (i = 0; i < 16; ++i) {
-        printf("%c", cbuff[i]);
-    }
-    printf("\n");
+    // char *cbuff = (char*) buff;
+    // for (i = 0; i < 16; ++i) {
+    //     cbuff[i] = 'x';
+    // }
+    // sys_debug_flush_cache();
+    // for (i = 0; i < 16; ++i) {
+    //     printf("%c", cbuff[i]);
+    // }
+    // printf("\n");
 
-    cbuff += 16 * 1024 * 1024;
-    for (i = 0; i < 16; ++i) {
-        cbuff[i] = 'y';
-    }
-    sys_debug_flush_cache();
-    for (i = 0; i < 16; ++i) {
-        printf("%c", cbuff[i]);
-    }
-    printf("\n");
+    // cbuff += 16 * 1024 * 1024;
+    // for (i = 0; i < 16; ++i) {
+    //     cbuff[i] = 'y';
+    // }
+    // sys_debug_flush_cache();
+    // for (i = 0; i < 16; ++i) {
+    //     printf("%c", cbuff[i]);
+    // }
+    // printf("\n");
     
-    cbuff += 16 * 1024 * 1024;
-    for (i = 0; i < 16; ++i) {
-        cbuff[i] = 'z';
-    }
-    sys_debug_flush_cache();
-    for (i = 0; i < 16; ++i) {
-        printf("%c", cbuff[i]);
-    }
-    printf("\n");
+    // cbuff += 16 * 1024 * 1024;
+    // for (i = 0; i < 16; ++i) {
+    //     cbuff[i] = 'z';
+    // }
+    // sys_debug_flush_cache();
+    // for (i = 0; i < 16; ++i) {
+    //     printf("%c", cbuff[i]);
+    // }
+    // printf("\n");
 
-    cbuff += 16 * 1024 * 1024;
-    for (i = 0; i < 16; ++i) {
-        cbuff[i] = 't';
-    }
-    sys_debug_flush_cache();
-    for (i = 0; i < 16; ++i) {
-        printf("%c", cbuff[i]);
-    }
-    printf("\n");
+    // cbuff += 16 * 1024 * 1024;
+    // for (i = 0; i < 16; ++i) {
+    //     cbuff[i] = 't';
+    // }
+    // sys_debug_flush_cache();
+    // for (i = 0; i < 16; ++i) {
+    //     printf("%c", cbuff[i]);
+    // }
+    // printf("\n");
 
-    mm_destroy(&aos_mm);
+    // mm_destroy(&aos_mm);
 
     return SYS_ERR_OK;
 }

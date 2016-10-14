@@ -23,6 +23,7 @@
 
 #include <mm/mm.h>
 #include "mem_alloc.h"
+#include <spawn/spawn.h>
 
 coreid_t my_core_id;
 struct bootinfo *bi;
@@ -64,6 +65,10 @@ int main(int argc, char *argv[])
     if(err_is_fail(err)){
         DEBUG_ERR(err, "initialize_ram_alloc");
     }
+
+    // spawn hello
+    struct spawninfo si;
+    spawn_load_by_name("/armv7/sbin/hello", &si);
 
     debug_printf("Message handler loop\n");
     // Hang around
