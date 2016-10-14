@@ -222,7 +222,17 @@ errval_t paging_map_frame_attr(struct paging_state *st, void **buf,
 errval_t
 slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref frame, size_t minbytes)
 {
-    // Refill the two-level slot allocator without causing a page-fault
+    void *buf;
+    errval_t err = paging_map_frame(
+            get_current_paging_state(),
+            &buf,
+            minbytes,
+            frame,
+            NULL, NULL);
+    if (err_is_fail(err)) {
+        return err;
+    }
+    slab_grow(slabs, buf, minbytes);
     return SYS_ERR_OK;
 }
 
