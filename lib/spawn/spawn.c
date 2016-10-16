@@ -58,6 +58,15 @@ errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si) {
     }
 
     // - Setup childs cspace
+
+    // Create L1 CNode
+    struct capref c1node;
+    struct cnoderef c1node_ref;
+    CHECK("new L1 cnode", cnode_create_l1(&c1node, &c1node_ref));
+    
+    // Link L2 CNode in L1 CNode
+    struct cnoderef c2node_ref;
+    CHECK("create new L2 cnode", cnode_create_foreign_l2(c1node, c1node.slot, &c2node_ref));
     // - Setup childs vspace
     // - Load the ELF binary
     // - Setup dispatcher
