@@ -29,48 +29,59 @@ void setup_cspace(struct spawninfo *si) {
     err = cnode_create_l1(&(si->l1_cap), &(si->l1_cnoderef));
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
+        return;
     }
 
     // Create TASKCN
     err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_TASKCN, &(si->taskcn));
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
+        return;
     }
 
     // Create SLOT PAGECN
     err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_PAGECN, &(si->pagecn));
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
+        return;
     }
 
     // Create SLOT BASE PAGE CN
     err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_BASE_PAGE_CN, &(si->base_pagecn));
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
+        return;
     }
 
     // Create SLOT ALLOC 0
     err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC0, &(si->alloc0));
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
+        return;
     }
 
     // Create SLOT ALLOC 1
     err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC1, &(si->alloc1));
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
+        return;
     }
 
     // Create SLOT ALLOC 2
     err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC2, &(si->alloc2));
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
+        return;
     }
 
     // Create SLOT DISPATCHER
     si->dispatcher.cnode = si->taskcn;
     si->dispatcher.slot = TASKCN_SLOT_DISPATCHER;
-
+    err = dispatcher_create(si->dispatcher);
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+        return;
+    }
     // err = cap_copy(si->dispatcher, cap_dispatcher);
     // if(err_is_fail(err)) {
     //     printf("%s\n", err_getstring(err));
@@ -80,6 +91,12 @@ void setup_cspace(struct spawninfo *si) {
     si->rootcn.cnode = si->taskcn;
     si->rootcn.slot = TASKCN_SLOT_ROOTCN;
 
+    // Copy the cap from l1 to rootcn
+    err = cap_copy(si->rootcn, si->l1_cap);
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+        return;
+    }
     // err = cap_copy(si->rootcn, cap_root);
     // if(err_is_fail(err)) {
     //     printf("%s\n", err_getstring(err));
