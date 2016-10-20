@@ -17,83 +17,41 @@
 extern struct bootinfo *bi;
 
 void setup_cspace(struct spawninfo *si) {
-    errval_t err;
-    err = cnode_create_l1(&(si->l1_cap), &(si->l1_cnoderef));
-    if(err_is_fail(err)) {
-        printf("%s\n", err_getstring(err));
-    }
+    CHECK("cnode_create_l1", cnode_create_l1(&(si->l1_cap), &(si->l1_cnoderef)));
 
     // Create TASKCN
-    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_TASKCN, &(si->taskcn));
-    if(err_is_fail(err)) {
-        printf("%s\n", err_getstring(err));
-    }
+    CHECK("taskcn", cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_TASKCN, &(si->taskcn)));
 
     // Create SLOT PAGECN
-    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_PAGECN, &(si->pagecn));
-    if(err_is_fail(err)) {
-        printf("%s\n", err_getstring(err));
-    }
+    CHECK("pagecn", cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_PAGECN, &(si->pagecn)))
 
     // Create SLOT BASE PAGE CN
-    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_BASE_PAGE_CN, &(si->base_pagecn));
-    if(err_is_fail(err)) {
-        printf("%s\n", err_getstring(err));
-    }
+    CHECK("base_pagecn", cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_BASE_PAGE_CN, &(si->base_pagecn)));
 
     // Create SLOT ALLOC 0
-    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC0, &(si->alloc0));
-    if(err_is_fail(err)) {
-        printf("%s\n", err_getstring(err));
-    }
+    CHECL("alloc0", cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC0, &(si->alloc0)));
 
     // Create SLOT ALLOC 1
-    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC1, &(si->alloc1));
-    if(err_is_fail(err)) {
-        printf("%s\n", err_getstring(err));
-    }
+    CHECK("alloc1", cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC1, &(si->alloc1)));
 
     // Create SLOT ALLOC 2
-    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC2, &(si->alloc2));
-    if(err_is_fail(err)) {
-        printf("%s\n", err_getstring(err));
-    }
+    CHECK("alloc2", cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC2, &(si->alloc2)));
 
     // Create SLOT DISPATCHER
     si->dispatcher.cnode = si->taskcn;
     si->dispatcher.slot = TASKCN_SLOT_DISPATCHER;
 
-    // err = cap_copy(si->dispatcher, cap_dispatcher);
-    // if(err_is_fail(err)) {
-    //     printf("%s\n", err_getstring(err));
-    // }
-
     // Create SLOT ROOTCN
     si->rootcn.cnode = si->taskcn;
     si->rootcn.slot = TASKCN_SLOT_ROOTCN;
-
-    // err = cap_copy(si->rootcn, cap_root);
-    // if(err_is_fail(err)) {
-    //     printf("%s\n", err_getstring(err));
-    // }
 
     // Create SLOT DISPFRAME
     si->dispframe.cnode = si->taskcn;
     si->dispframe.slot = TASKCN_SLOT_DISPFRAME;
 
-    // err = cap_copy(si->dispframe, cap_dispframe);
-    // if(err_is_fail(err)) {
-    //     printf("%s\n", err_getstring(err));
-    // }
-
     // Create SLOT ARGSPG
     si->argspg.cnode = si->taskcn;
     si->argspg.slot = TASKCN_SLOT_ARGSPAGE;
-
-    // err = cap_copy(si->argspg, cap_argcn);
-    // if(err_is_fail(err)) {
-    //     printf("%s\n", err_getstring(err));
-    // }
 
     cap_retype(si->selfep, si->dispatcher, 0, ObjType_EndPoint, 0, 1);
 
