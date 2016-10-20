@@ -21,6 +21,8 @@
             return err;  \
         }
 
+#define STATIC_ARRAY_LENGTH(x) (sizeof(x) / sizeof((x)[0]))
+
 
 extern struct bootinfo *bi;
 
@@ -206,13 +208,13 @@ errval_t setup_dispatcher(struct spawninfo *si) {
     void *disp_addr_in_me;
     CHECK("mapping dispatcher frame into my vspace",
           paging_map_frame(get_current_paging_state(), &disp_addr_in_me,
-                           1<<DISPATCHER_FRAME_BITS, my_dispframe, NULL, NULL));
+                           retsize, my_dispframe, NULL, NULL));
     si->disp_handle = (dispatcher_handle_t)disp_addr_in_me;
 
     void *disp_addr_in_child;
     CHECK("mapping dispatcher frame into child's vspace",
           paging_map_frame(&si->pg_state, &disp_addr_in_child,
-                           1<<DISPATCHER_FRAME_BITS, si->dispframe, NULL, NULL));
+                           retsize, si->dispframe, NULL, NULL));
 
     struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic(si->disp_handle);
     struct dispatcher_generic *disp_gen = get_dispatcher_generic(si->disp_handle);
@@ -240,6 +242,89 @@ errval_t setup_dispatcher(struct spawninfo *si) {
     disp_gen->eh_frame_hdr_size = 0;
     return SYS_ERR_OK;
 }
+
+errval_t setup_args(struct spawninfo *si, char *const argv[], int argc) {
+    size_t retsize;
+    CHECK("allocating frame for args page",
+          frame_alloc(&si->argspg, BASE_PAGE_SIZE, &retsize));
+
+    struct capref my_argsframe;
+    CHECK("allocating slot for args frame cap", slot_alloc(&my_argsframe));
+    CHECK("copying args frame cap", cap_copy(my_argsframe, si->argspg));
+
+    void *args_addr_in_me;
+    CHECK("mapping args frame into my vspace",
+          paging_map_frame(get_current_paging_state(), &args_addr_in_me,
+                           retsize, my_argsframe, NULL, NULL));
+
+    void *args_addr_in_child;
+    CHECK("mapping args frame into child's vspace",
+          paging_map_frame(&si->pg_state, &args_addr_in_child,
+                           retsize, si->argspg, NULL, NULL));
+
+    struct spawn_domain_params *params = (struct spawn_domain_params*)args_addr_in_me;
+    memset(params, 0, sizeof(params));
+
+    params->argc = argc;
+    CHECK_COND("max number of cmdline args exceeded",
+               params->argc <= MAX_CMDLINE_ARGS, SPAWN_ERR_LOAD);
+    // CHECK_COND("max number of env vars exceeded",
+    //            count_args(envp) <= MAX_ENVIRON_VARS, SPAWN_ERR_LOAD);
+
+    size_t args_offset = ROUND_UP(sizeof(struct spawn_domain_params), 4);
+    for (size_t i = 0; argv[i] != NULL; ++i) {
+        params->argv[i] = args_addr_in_child + args_offset;
+        strcpy((char*) args_addr_in_me + args_offset, argv[i]);
+        args_offset += strlen(argv[i]) + 1; // +1 for the terminating NULL.
+    }
+    ((char*) args_addr_in_me)[args_offset] = '\0';
+    // *((char*)(args_addr_in_me + args_offset)) = NULL;
+    // ++args_offset;
+    // args_offset = ROUND_UP(args_offset, 4);
+
+    // for (size_t i = 0; envp[i] != NULL; ++i) {
+    //     params->envp[i] = args_addr_in_child + args_offset;
+    //     strcpy((char*) args_addr_in_me + args_offset, envp[i]);
+    //     args_offset += strlen(envp[i]) + 1; // +1 for the terminating NULL.
+    // }
+    // *(char*)(args_addr_in_me + args_offset) = NULL;
+
+    return SYS_ERR_OK;
+}
+
+int spawn_tokenize_cmdargs(char *s, char *argv[], size_t argv_len)
+{
+    bool inquote = false;
+    int argc = 0;
+    assert(argv_len > 1);
+    assert(s != NULL);
+
+    // consume leading whitespace, and mark first argument
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s != '\0') {
+        argv[argc++] = s;
+    }
+
+    while (argc + 1 < argv_len && *s != '\0') {
+        if (*s == '"') {
+            inquote = !inquote;
+            // consume quote mark, by moving remainder of string over it
+            memmove(s, s + 1, strlen(s));
+        } else if ((*s == ' ' || *s == '\t') && !inquote) { // First whitespace, arg finished
+            *s++ = '\0';
+            while (*s == ' ' || *s == '\t') s++; // Consume trailing whitespace
+            if (*s != '\0') { // New arg started
+                argv[argc++] = s;
+            }
+        } else {
+            s++;
+        }
+    }
+
+    argv[argc] = NULL;
+    return argc;
+}
+
 
 // TODO(M2): Implement this function such that it starts a new process
 // TODO(M4): Build and pass a messaging channel to your child process
@@ -299,11 +384,19 @@ errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si) {
     CHECK("setting up dispatcher", setup_dispatcher(si));
 
     // - Setup environment
-    // 1. get the frame from SLOT_ARGSPACE
-    // 2. cast that frame into struct spawn_domain_params
-    // 3. stuff the multiboot's params here
+    // get arguments from menu.lst
+    const char *args_string = multiboot_module_opts(module);
+    char *args_string_rw = malloc(strlen(args_string)+1);
+    strcpy(args_string_rw, args_string);
+    char *argv[MAX_CMDLINE_ARGS + 1];
+    int argc = spawn_tokenize_cmdargs(args_string_rw, argv, STATIC_ARRAY_LENGTH(argv));
+    CHECK("args", setup_args(si, argv, argc));
 
     // - Make dispatcher runnable
+    CHECK("invoking dispatcher",
+          invoke_dispatcher(si->dispatcher, cap_dispatcher,
+          si->l1_cap, si->pg_state.l1_pagetable,
+          si->dispframe, true));
 
     return SYS_ERR_OK;
 }
