@@ -154,7 +154,7 @@ void setup_vspace(struct spawninfo *si) {
         printf("%s\n", err_getstring(err));
         return;
     }
-    
+
     // 3. Create child L1 pagetable.
     si->pg_state.l1_pagetable.cnode = si->pagecn;
     si->pg_state.l1_pagetable.slot = 0;
@@ -168,7 +168,7 @@ void setup_vspace(struct spawninfo *si) {
 // Stuffs the ELF in the memory, preparing it for execution:
 // - mapping sections where they need to be
 // - dealing with the GOT
-static errval_t load_elf_into_memory(lvaddr_t base, size_t size, genvaddr_t *entry_point, genvaddr_t *got_ubase) {
+errval_t load_elf_into_memory(lvaddr_t base, size_t size, genvaddr_t *entry_point, genvaddr_t *got_ubase) {
     int state = 42;  // TODO
 
     // stuff the sections into memory
@@ -188,15 +188,32 @@ static errval_t load_elf_into_memory(lvaddr_t base, size_t size, genvaddr_t *ent
 //  - flags is
 //  - dest is the address in this vspace where we need to copy things (so that they appear there)
 //  - state should be just paging_state (which will be in spawninfo)
-static errval_t elf_section_allocate(void *state, genvaddr_t base, size_t size,
+errval_t elf_section_allocate(void *state, genvaddr_t base, size_t size,
                                      uint32_t flags, void **ret) {
     return LIB_ERR_NOT_IMPLEMENTED;
 }
 
+errval_t setup_dispatcher(struct spawninfo *si) {
+    size_t retsize;
+    CHECK("allocating frame for dispatcher",
+          frame_alloc(&si->dispframe, 1<<DISPATCHER_FRAME_BITS, &retsize));
 
-// TODO maybe void, depending on whether I allocate the frame here or not...
-static errval_t setup_dispatcher(struct spawninfo *si, void *disp_frame) {
-    si->disp_handle = (dispatcher_handle_t)disp_frame; // TODO here?
+    struct capref my_dispframe;
+    CHECK("allocating slot for dispatcher frame cap", slot_alloc(&my_dispframe));
+    CHECK("copying dispatcher frame cap", cap_copy(my_dispframe, si->dispframe));
+    assert(1<<DISPATCHER_FRAME_BITS <= retsize);
+
+    void *disp_addr_in_me;
+    CHECK("mapping dispatcher frame into my vspace",
+          paging_map_frame(get_current_paging_state(), &disp_addr_in_me,
+                           1<<DISPATCHER_FRAME_BITS, my_dispframe, NULL, NULL));
+    si->disp_handle = (dispatcher_handle_t)disp_addr_in_me;
+
+    void *disp_addr_in_child;
+    CHECK("mapping dispatcher frame into child's vspace",
+          paging_map_frame(&si->pg_state, &disp_addr_in_child,
+                           1<<DISPATCHER_FRAME_BITS, si->dispframe, NULL, NULL));
+
     struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic(si->disp_handle);
     struct dispatcher_generic *disp_gen = get_dispatcher_generic(si->disp_handle);
     struct dispatcher_shared_arm *disp_arm = get_dispatcher_shared_arm(si->disp_handle);
@@ -204,7 +221,7 @@ static errval_t setup_dispatcher(struct spawninfo *si, void *disp_frame) {
     arch_registers_state_t *disabled_area = dispatcher_get_disabled_save_area(si->disp_handle);
 
     disp_gen->core_id = 0; // we're single-core right now
-    // disp->udisp = TODO map to child's vspace // Virtual address of the dispatcher frame in childs VSpace
+    disp->udisp = (lvaddr_t)disp_addr_in_child; // Virtual address of the dispatcher frame in childs VSpace
     disp->disabled = 1; // Start in disabled mode
     disp->fpu_trap = 1; // Trap on fpu instructions
     strncpy(disp->name, si->binary_name, DISP_NAME_LEN); // A name (for debugging)
@@ -223,7 +240,6 @@ static errval_t setup_dispatcher(struct spawninfo *si, void *disp_frame) {
     disp_gen->eh_frame_hdr_size = 0;
     return SYS_ERR_OK;
 }
-
 
 // TODO(M2): Implement this function such that it starts a new process
 // TODO(M4): Build and pass a messaging channel to your child process
@@ -273,16 +289,14 @@ errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si) {
     //CHECK("Setup CSPACE", setup_cspace(si));
 
     // - Setup childs vspace
-
-    // TODO assume that someone gives me a dispatcher frame here, and also stuffs its capability into "the correct" slot
-    //      assume it is called disp_frame
+    setup_vspace(si);
 
     // - Load the ELF binary
     CHECK("loading ELF", load_elf_into_memory(mapped_elf, child_frame_id.bytes,
                                               &si->entry_point, &si->got_ubase));
 
     // - Setup dispatcher
-    CHECK("setting up dispatcher", setup_dispatcher(si, disp_frame));
+    CHECK("setting up dispatcher", setup_dispatcher(si));
 
     // - Setup environment
     // 1. get the frame from SLOT_ARGSPACE

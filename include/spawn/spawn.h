@@ -57,5 +57,9 @@ errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si);
 
 void setup_cspace(struct spawninfo *si);
 void setup_vspace(struct spawninfo *si);
+errval_t setup_dispatcher(struct spawninfo *si);
+errval_t load_elf_into_memory(lvaddr_t base, size_t size, genvaddr_t *entry_point, genvaddr_t *got_ubase);
+errval_t elf_section_allocate(void *state, genvaddr_t base, size_t size,
+                              uint32_t flags, void **ret);
 
 #endif /* _INIT_SPAWN_H_ */
