@@ -22,7 +22,14 @@ struct spawninfo {
 
     // Information about the binary
     char * binary_name;     // Name of the binary
+    
+    // Cap for L1 Node and it's ref to it's table
+    struct capref l1_cap;
+    struct cnoderef l1_cnoderef;
 
+    // Cap for L2 Node and it's ref to it's table
+    struct capref l2_cap;
+    struct cnoderef l2_cnoderef;
     // TODO: Use this structure to keep track
     // of information you need for building/starting
     // your new process!
@@ -30,5 +37,8 @@ struct spawninfo {
 
 // Start a child process by binary name. Fills in si
 errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si);
+
+void setup_cspace(struct spawninfo *si);
+// errval_t setup_vspace(struct spawninfo *si);
 
 #endif /* _INIT_SPAWN_H_ */

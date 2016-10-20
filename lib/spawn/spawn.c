@@ -16,6 +16,24 @@
 
 extern struct bootinfo *bi;
 
+void setup_cspace(struct spawninfo *si) {
+    errval_t err;
+    err = cnode_create_l1(&(si->l1_cap), &(si->l1_cnoderef));
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+    }
+    err = cnode_create_foreign_l2(si->l1_cap, 0, &(si->l2_cnoderef));
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+    }
+
+}
+
+// errval_t setup_vspace(struct spawninfo *si) {
+//     errval_t err;
+    
+// }
+
 // TODO(M2): Implement this function such that it starts a new process
 // TODO(M4): Build and pass a messaging channel to your child process
 errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si) {
@@ -59,14 +77,8 @@ errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si) {
 
     // - Setup childs cspace
 
-    // Create L1 CNode
-    struct capref c1node;
-    struct cnoderef c1node_ref;
-    CHECK("new L1 cnode", cnode_create_l1(&c1node, &c1node_ref));
-    
-    // Link L2 CNode in L1 CNode
-    struct cnoderef c2node_ref;
-    CHECK("create new L2 cnode", cnode_create_foreign_l2(c1node, c1node.slot, &c2node_ref));
+    setup_cspace(si);
+    //CHECK("Setup CSPACE", setup_cspace(si));
     // - Setup childs vspace
     // - Load the ELF binary
     // - Setup dispatcher
