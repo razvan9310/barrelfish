@@ -76,6 +76,9 @@ struct paging_state {
     struct slab_allocator slabs;
     // Whether slabs are being refilled.
     bool slab_refilling;
+
+    // Cap to the L1 pagetable of the owner process.
+    struct capref l1_pagetable;
 };
 
 struct thread;

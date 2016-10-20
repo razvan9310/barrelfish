@@ -72,6 +72,10 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr,
     st->head->type = NodeType_Free;
     st->head->prev = NULL;
 
+    // Default L1 pagetable.
+    st->l1_pagetable.cnode = cnode_page;
+    st->l1_pagetable.slot = 0;
+
     // TODO: What should we do with pdir?
 
     // TODO (M4): Implement page fault handler that installs frames when a page fault
@@ -300,13 +304,7 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
             node->size -= left->size;
         }
 
-        /* Step 2: Get reference to L1 pagetable. */
-        struct capref l1_cap = {
-            .cnode = cnode_page,
-            .slot = 0,
-        };
-
-        /* Step 3: Compute & (if needed) create all the necessary L2 tables and
+        /* Step 2: Compute & (if needed) create all the necessary L2 tables and
            sub-frames. */
         uint32_t mapped_size = 0;
         errval_t err;
@@ -327,8 +325,8 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                 // Map newly created L2 to L1.
                 struct capref l2_to_l1;
                 st->slot_alloc->alloc(st->slot_alloc, &l2_to_l1);
-                err = vnode_map(l1_cap, l2_cap, l2_index,
-                    VREGION_FLAGS_READ_WRITE, 0, 1, l2_to_l1);
+                err = vnode_map(st->l1_pagetable, l2_cap, l2_index,
+                        VREGION_FLAGS_READ_WRITE, 0, 1, l2_to_l1);
                 if (err_is_fail(err)) {
                     DEBUG_ERR(err, "Mapping L2 to L1");
                     return err;
@@ -344,7 +342,7 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                     ? bytes
                     : l2_entries_left * BASE_PAGE_SIZE;
 
-            /* Step 4: Perform mapping. */
+            /* Step 3: Perform mapping. */
             struct capref frame_to_l2;
             st->slot_alloc->alloc(st->slot_alloc, &frame_to_l2);
             err = vnode_map(l2_cap,
