@@ -42,7 +42,8 @@ struct spawninfo {
 
     struct cnoderef pagecn;
 
-    struct paging_state current;
+    struct paging_state pg_state;
+    struct single_slot_allocator ssa;
 
     dispatcher_handle_t disp_handle;
 

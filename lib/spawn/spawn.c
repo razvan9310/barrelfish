@@ -108,11 +108,43 @@ void setup_cspace(struct spawninfo *si) {
 }
 
 void setup_vspace(struct spawninfo *si) {
-    si->l1_pagetable.cnode = si->pagecn;
-    si->l1_pagetable.slot = 0;
+    // 1. Create slot allocator for child vspace.
+    size_t bufsize = SINGLE_SLOT_ALLOC_BUFLEN(L2_CNODE_SLOTS);
+    void *buf = malloc(bufsize);
+    assert(buf != NULL);
 
-//     //CHECK("", cap_copy(si->l1_pagetable, cnode_page));
-     vnode_create(, ObjType_VNode_ARM_l1);
+    struct capref pagecn_cap = {
+        .cnode = si->l1_cnoderef,
+        .slot = ROOTCN_SLOT_PAGECN
+    };
+    errval_t err = single_slot_alloc_init_raw(
+            &si->ssa,
+            pagecn_cap,
+            si->pagecn,
+            L2_CNODE_SLOTS,
+            buf,
+            bufsize);
+    if (err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+        return;
+    }
+
+    // 2. Create child paging state.
+    // TODO: Where should the pdir capref come from?
+    struct capref pdir;
+    err = paging_init_state(&si->pg_state, VADDR_OFFSET, pdir, &si->ssa.a);
+    if (err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+        return;
+    }
+    
+    // 3. Create child L1 pagetable.
+    si->pg_state.l1_pagetable.cnode = si->pagecn;
+    si->pg_state.l1_pagetable.slot = 0;
+    err = vnode_create(si->pg_state.l1_pagetable, ObjType_VNode_ARM_l1);
+    if (err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+    }
 }
 
 
