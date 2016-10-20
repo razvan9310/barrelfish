@@ -22,17 +22,90 @@ void setup_cspace(struct spawninfo *si) {
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
     }
-    err = cnode_create_foreign_l2(si->l1_cap, 0, &(si->l2_cnoderef));
+
+    // Create TASKCN
+    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_TASKCN, &(si->taskcn));
     if(err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
     }
 
+    // Create SLOT PAGECN
+    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_PAGECN, &(si->pagecn));
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+    }
+
+    // Create SLOT BASE PAGE CN
+    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_BASE_PAGE_CN, &(si->base_pagecn));
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+    }
+
+    // Create SLOT ALLOC 0
+    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC0, &(si->alloc0));
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+    }
+
+    // Create SLOT ALLOC 1
+    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC1, &(si->alloc1));
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+    }
+
+    // Create SLOT ALLOC 2
+    err = cnode_create_foreign_l2(si->l1_cap, ROOTCN_SLOT_SLOT_ALLOC2, &(si->alloc2));
+    if(err_is_fail(err)) {
+        printf("%s\n", err_getstring(err));
+    }
+
+    // Create SLOT DISPATCHER
+    si->dispatcher.cnode = si->taskcn;
+    si->dispatcher.slot = TASKCN_SLOT_DISPATCHER;
+
+    // err = cap_copy(si->dispatcher, cap_dispatcher);
+    // if(err_is_fail(err)) {
+    //     printf("%s\n", err_getstring(err));
+    // }
+
+    // Create SLOT ROOTCN
+    si->rootcn.cnode = si->taskcn;
+    si->rootcn.slot = TASKCN_SLOT_ROOTCN;
+
+    // err = cap_copy(si->rootcn, cap_root);
+    // if(err_is_fail(err)) {
+    //     printf("%s\n", err_getstring(err));
+    // }
+
+    // Create SLOT DISPFRAME
+    si->dispframe.cnode = si->taskcn;
+    si->dispframe.slot = TASKCN_SLOT_DISPFRAME;
+
+    // err = cap_copy(si->dispframe, cap_dispframe);
+    // if(err_is_fail(err)) {
+    //     printf("%s\n", err_getstring(err));
+    // }
+
+    // Create SLOT ARGSPG
+    si->argspg.cnode = si->taskcn;
+    si->argspg.slot = TASKCN_SLOT_ARGSPAGE;
+
+    // err = cap_copy(si->argspg, cap_argcn);
+    // if(err_is_fail(err)) {
+    //     printf("%s\n", err_getstring(err));
+    // }
+
+    cap_retype(si->selfep, si->dispatcher, 0, ObjType_EndPoint, 0, 1);
+
 }
 
-// errval_t setup_vspace(struct spawninfo *si) {
-//     errval_t err;
-    
-// }
+void setup_vspace(struct spawninfo *si) {
+    si->l1_pagetable.cnode = si->pagecn;
+    si->l1_pagetable.slot = 0;
+
+//     //CHECK("", cap_copy(si->l1_pagetable, cnode_page));
+     vnode_create(, ObjType_VNode_ARM_l1);
+}
 
 // TODO(M2): Implement this function such that it starts a new process
 // TODO(M4): Build and pass a messaging channel to your child process
