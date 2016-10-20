@@ -67,8 +67,8 @@ int main(int argc, char *argv[])
     }
 
     // spawn hello
-    struct spawninfo si;
-    spawn_load_by_name("/armv7/sbin/hello", &si);
+    struct spawninfo *si = malloc(sizeof(struct spawninfo));
+    spawn_load_by_name("/armv7/sbin/hello", si);
 
     debug_printf("Message handler loop\n");
     // Hang around

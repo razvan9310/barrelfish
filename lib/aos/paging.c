@@ -47,19 +47,21 @@ static errval_t arml2_alloc(struct paging_state * st, struct capref *ret)
 errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr,
         struct capref pdir, struct slot_allocator *ca)
 {
-    debug_printf("paging_init_state\n");
+    debug_printf("paging_init_state %p\n", st);
 
     // M2:
     // Slot allocator.
     st->slot_alloc = ca;
 
-    // Slab allocator. 16 nodes should be enough, as we'll have the Memory
+    // Slab allocator. 64 nodes should be enough, as we'll have the Memory
     // Manager up and running before we really start mapping vaddresses.
     slab_init(&st->slabs, sizeof(struct paging_node), slab_default_refill);
-    static char paging_buf[sizeof(struct paging_node) * 16];
-    slab_grow(&st->slabs, paging_buf, sizeof(paging_buf));
+    static char paging_buf[8][sizeof(struct paging_node) * 64];
+    static int i_want_to_die = 0;
+    slab_grow(&st->slabs, paging_buf[i_want_to_die], sizeof(paging_buf[i_want_to_die]));
+    ++i_want_to_die;
 
-    // We don't have any L2 pagetables yet, thus make sure the flags are unset. 
+    // We don't have any L2 pagetables yet, thus make sure the flags are unset.
     for (int i = 0; i < L1_PAGETABLE_ENTRIES; ++i) {
         st->l2_pagetables[i].initialized = false;
     }
@@ -67,6 +69,7 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr,
     size_t capacity = (size_t) (0xFFFFFFFF - start_vaddr);
     // Four initial empty nodes.
     st->head = (struct paging_node*) slab_alloc(&st->slabs);
+    printf("paging state: %p, st->head: %p\n", st, st->head);
     st->head->base = start_vaddr;
     st->head->size = capacity;
     st->head->type = NodeType_Free;
@@ -191,6 +194,7 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes)
     while (node != NULL) {
         if (node->type == NodeType_Free && node->size >= bytes) {
             *buf = (void*) node->base;
+            printf("found free node at base %u\n", node->base);
             return SYS_ERR_OK;
         }
         node = node->next;
@@ -214,7 +218,7 @@ errval_t paging_map_frame_attr(struct paging_state *st, void **buf,
             DEBUG_ERR(err, "slab refill_func failed");
             return LIB_ERR_VREGION_MAP;
         }
-        st->slab_refilling = false;   
+        st->slab_refilling = false;
     }
     errval_t err = paging_alloc(st, buf, bytes);
     if (err_is_fail(err)) {
@@ -243,7 +247,7 @@ slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref frame, size
 /**
  * \brief map a user provided frame at user provided VA.
  * TODO(M1): Map a frame assuming all mappings will fit into one L2 pt
- * TODO(M2): General case 
+ * TODO(M2): General case
  */
 errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
         struct capref frame, size_t bytes, int flags)
@@ -263,6 +267,7 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
         }
         if (node->base > vaddr || node->base + node->size < vaddr + bytes) {
             // Current node can't hold the desired vregion.
+            node = node->next;
             continue;
         }
 
@@ -325,6 +330,7 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                 // Map newly created L2 to L1.
                 struct capref l2_to_l1;
                 st->slot_alloc->alloc(st->slot_alloc, &l2_to_l1);
+                printf("(1) vnode_map to dest slot %u\n", st->l1_pagetable);
                 err = vnode_map(st->l1_pagetable, l2_cap, l2_index,
                         VREGION_FLAGS_READ_WRITE, 0, 1, l2_to_l1);
                 if (err_is_fail(err)) {
@@ -342,9 +348,12 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                     ? bytes
                     : l2_entries_left * BASE_PAGE_SIZE;
 
+            printf("PAGING: %p %u %u\n", st, l2_index, frame_index);
+
             /* Step 3: Perform mapping. */
             struct capref frame_to_l2;
             st->slot_alloc->alloc(st->slot_alloc, &frame_to_l2);
+            printf("(2) vnode_map to dest slot %u\n", l2_cap);
             err = vnode_map(l2_cap,
                     frame/*cap_to_map*/,
                     frame_index,

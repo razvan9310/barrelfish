@@ -147,11 +147,13 @@ void setup_vspace(struct spawninfo *si) {
         printf("%s\n", err_getstring(err));
         return;
     }
+    si->ssa.head->slot = 1;
+    --si->ssa.head->space;
 
     // 2. Create child paging state.
     // TODO: Where should the pdir capref come from?
     struct capref pdir;
-    err = paging_init_state(&si->pg_state, VADDR_OFFSET, pdir, &si->ssa.a);
+    err = paging_init_state(&si->pg_state, 0, pdir, &si->ssa.a);
     if (err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
         return;
@@ -170,16 +172,16 @@ void setup_vspace(struct spawninfo *si) {
 // Stuffs the ELF in the memory, preparing it for execution:
 // - mapping sections where they need to be
 // - dealing with the GOT
-errval_t load_elf_into_memory(lvaddr_t base, size_t size, genvaddr_t *entry_point, genvaddr_t *got_ubase) {
-    int state = 42;  // TODO
-
+errval_t load_elf_into_memory(struct spawninfo *si, lvaddr_t base, size_t size) {
     // stuff the sections into memory
-    return elf_load(EM_ARM, elf_section_allocate, (void*)&state,
-                    base, size, entry_point);
+    CHECK("loading ELF (lib fn)", elf_load(EM_ARM, elf_section_allocate, (void*)&si->pg_state,
+                    base, size, &si->entry_point));
 
     // find the GOT -- this will be needed by the dispatcher
     struct Elf32_Shdr *got_shdr = elf32_find_section_header_name(base, size, ".got");
-    *got_ubase = got_shdr->sh_addr;
+    si->got_ubase = (genvaddr_t)got_shdr->sh_addr;
+
+    return SYS_ERR_OK;
 }
 
 // Handles ELF sections.
@@ -190,9 +192,28 @@ errval_t load_elf_into_memory(lvaddr_t base, size_t size, genvaddr_t *entry_poin
 //  - flags is
 //  - dest is the address in this vspace where we need to copy things (so that they appear there)
 //  - state should be just paging_state (which will be in spawninfo)
-errval_t elf_section_allocate(void *state, genvaddr_t base, size_t size,
+errval_t elf_section_allocate(void *state_void, genvaddr_t base, size_t size,
                                      uint32_t flags, void **ret) {
-    return LIB_ERR_NOT_IMPLEMENTED;
+    if (size == 0) return SYS_ERR_OK;
+    struct paging_state *state = (struct paging_state *) state_void;
+    size_t retsize;
+    struct capref my_frame;
+    printf("allocating section of size %u\n", size);
+    CHECK("allocating slot for my frame cap", slot_alloc(&my_frame));
+    CHECK("allocating frame for function", frame_alloc(&my_frame, size, &retsize));
+    printf("BEFORE paging_map_frame\n");
+    CHECK("mapping ELF section to my vspace",
+          paging_map_frame(get_current_paging_state(), ret, retsize, my_frame, NULL, NULL));
+
+    struct capref child_frame;
+    CHECK("allocating slot for child's frame cap",
+          state->slot_alloc->alloc(state->slot_alloc, &child_frame));
+    printf("child_frame.slot: %u\n", child_frame.slot);
+    CHECK("copying section frame cap", cap_copy(child_frame, my_frame));
+    errval_t err = paging_map_fixed_attr(state, (lvaddr_t)base, child_frame, retsize, flags);
+    printf("AFTER paging_map_fixed_attr\n");
+    CHECK("mapping section in child\n", err);
+    return SYS_ERR_OK;
 }
 
 errval_t setup_dispatcher(struct spawninfo *si) {
@@ -377,8 +398,7 @@ errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si) {
     setup_vspace(si);
 
     // - Load the ELF binary
-    CHECK("loading ELF", load_elf_into_memory(mapped_elf, child_frame_id.bytes,
-                                              &si->entry_point, &si->got_ubase));
+    CHECK("loading ELF", load_elf_into_memory(si, mapped_elf, child_frame_id.bytes));
 
     // - Setup dispatcher
     CHECK("setting up dispatcher", setup_dispatcher(si));
