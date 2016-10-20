@@ -42,10 +42,8 @@ struct spawninfo {
     
     struct cnoderef pagecn;
     
-    struct paging_state current;
-    // TODO: Use this structure to keep track
-    // of information you need for building/starting
-    // your new process!
+    struct paging_state pg_state;
+    struct single_slot_allocator ssa;
 };
 
 // Start a child process by binary name. Fills in si
