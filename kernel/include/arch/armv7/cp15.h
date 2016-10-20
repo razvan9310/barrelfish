@@ -226,6 +226,11 @@ static inline void cp15_write_dcisw(uint32_t x)
 	__asm volatile ("mcr p15, 0, %[x], c7, c6, 2" :: [x] "r" (x));
 }
 
+static inline void cp15_write_dccsw(uint32_t x)
+{
+	__asm volatile ("mcr p15, 0, %[x], c7, c10, 2" :: [x] "r" (x));
+}
+
 static inline void cp15_write_dccisw(uint32_t x)
 {
 	__asm volatile ("mcr p15, 0, %[x], c7, c14, 2" :: [x] "r" (x));

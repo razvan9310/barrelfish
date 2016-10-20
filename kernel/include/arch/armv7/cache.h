@@ -57,9 +57,9 @@ csb(uint32_t x) {
     return 32 - __builtin_clz(x);
 }
 
-/* Invalidate an entire data cache. */
+/* Clean and/or invalidate an entire data cache. */
 static inline void
-invalidate_data_cache(size_t level, bool clean) {
+full_cache_op(size_t level, bool clean, bool invalidate) {
     assert(level >= 1 && level <= 7);
 
     enum armv7_cache_type type= cache_get_type(level);
@@ -88,8 +88,13 @@ invalidate_data_cache(size_t level, bool clean) {
             uint32_t wsl= (w << w_shift) |
                           (s << s_shift) |
                           ((level - 1) << 1);
-            if(clean) cp15_write_dccisw(wsl);
-            else      cp15_write_dcisw(wsl);
+            if(clean) {
+                if(invalidate) cp15_write_dccisw(wsl);
+                else           cp15_write_dccsw(wsl);
+            }
+            else {
+                if(invalidate) cp15_write_dcisw(wsl);
+            }
         }
     }
 }
@@ -100,7 +105,16 @@ invalidate_data_caches_pouu(bool clean) {
     size_t louu= cache_get_louu();
 
     for(size_t level= 1; level <= louu; level++)
-        invalidate_data_cache(level, clean);
+        full_cache_op(level, clean, 1);
+}
+
+/* Clean all data caches to point of unification. */
+static inline void
+clean_data_caches_pouu(void) {
+    size_t louu= cache_get_louu();
+
+    for(size_t level= 1; level <= louu; level++)
+        full_cache_op(level, 1, 0);
 }
 
 /* Invalidate this core's instruction cache. */
