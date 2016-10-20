@@ -22,8 +22,8 @@ struct spawninfo {
 
     // Information about the binary
     char * binary_name;     // Name of the binary
-    
-    // Cap for L1 Node and it's ref to it's table
+
+    // Cap for L1 Node and its ref to its table
     struct capref l1_cap;
     struct cnoderef l1_cnoderef;
 
@@ -39,13 +39,16 @@ struct spawninfo {
     struct cnoderef alloc1;
     struct cnoderef alloc2;
     struct cnoderef base_pagecn;
-    
+
     struct cnoderef pagecn;
-    
+
     struct paging_state current;
-    // TODO: Use this structure to keep track
-    // of information you need for building/starting
-    // your new process!
+
+    dispatcher_handle_t disp_handle;
+
+    // executable image's properties
+    genvaddr_t got_ubase; // in the child's vspace
+    genvaddr_t entry_point;
 };
 
 // Start a child process by binary name. Fills in si

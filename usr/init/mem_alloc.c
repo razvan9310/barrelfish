@@ -71,8 +71,9 @@ errval_t initialize_ram_alloc(void)
 
     genpaddr_t base = 0;
     for (int i = 0; i < bi->regions_length; i++) {
+        printf("mem_alloc: found region: {mr_base=%llu, mr_bytes=%u, mrmod_size=%u, mrmod_slot=%d}\n", bi->regions[i].mr_base, bi->regions[i].mr_bytes, bi->regions[i].mrmod_size, bi->regions[i].mrmod_slot);
+
         if (bi->regions[i].mr_type == RegionType_Empty) {
-            // printf("Before mm_add\n\n");
             err = mm_add(&aos_mm, mem_cap, bi->regions[i].mr_base, bi->regions[i].mr_bytes);
             if (err_is_ok(err)) {
                 if (base == 0) {
@@ -92,6 +93,7 @@ errval_t initialize_ram_alloc(void)
 
             mem_cap.slot++;
         }
+        printf("found some bootinfo region\n");
     }
     debug_printf("Added %"PRIu64" MB of physical memory.\n", mem_avail / 1024 / 1024);
 
