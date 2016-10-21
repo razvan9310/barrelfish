@@ -23,29 +23,26 @@ struct spawninfo {
     // Information about the binary
     char * binary_name;     // Name of the binary
 
-    // Cap for L1 Node and its ref to its table
-    struct capref l1_cap;
-    struct cnoderef l1_cnoderef;
+    // Cap for L1Cnode.
+    struct capref l1_cnode_cap;
+    // L2Cnodes.
+    struct cnoderef l2_cnodes[ROOTCN_SLOTS_USER];
 
-    struct cnoderef taskcn;
+    // Caps for L1 pagetable in {parent, child}.
+    struct capref l1_pagetable_me;
+    struct capref l1_pagetable_child;
 
-    struct capref dispatcher;
-    struct capref rootcn;
-    struct capref dispframe;
-    struct capref argspg;
-    struct capref selfep;
-
-    struct cnoderef alloc0;
-    struct cnoderef alloc1;
-    struct cnoderef alloc2;
-    struct cnoderef base_pagecn;
-
-    struct cnoderef pagecn;
-
+    // Child's paging state.
     struct paging_state pg_state;
-    struct single_slot_allocator ssa;
 
+    // Tracking slots for child vspace caps.
+    cslot_t next_slot;
+
+    // Child's dispatcher.
+    struct capref dispatcher;
+    struct capref dispatcher_frame;
     dispatcher_handle_t disp_handle;
+    arch_registers_state_t* enabled_area;
 
     // executable image's properties
     genvaddr_t got_ubase; // in the child's vspace
@@ -55,13 +52,15 @@ struct spawninfo {
 // Start a child process by binary name. Fills in si
 errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si);
 
-void setup_cspace(struct spawninfo *si);
-void setup_vspace(struct spawninfo *si);
+errval_t setup_cspace(struct spawninfo *si);
+errval_t mapping_cb(void* mapping_state, struct capref cap);
+errval_t setup_vspace(struct spawninfo *si);
+errval_t setup_elf(struct spawninfo* si, lvaddr_t vaddr, size_t bytes);
+errval_t elf_alloc_section(void* sate, genvaddr_t base, size_t bytes,
+        uint32_t flags, void** ret);
 errval_t setup_dispatcher(struct spawninfo *si);
-errval_t load_elf_into_memory(struct spawninfo *si, lvaddr_t base, size_t size);
 errval_t elf_section_allocate(void *state, genvaddr_t base, size_t size,
                               uint32_t flags, void **ret);
-errval_t setup_args(struct spawninfo *si, char *const argv[], int argc);
-int spawn_tokenize_cmdargs(char *s, char *argv[], size_t argv_len);
+errval_t setup_args(struct spawninfo* si, struct mem_region* mr);
 
 #endif /* _INIT_SPAWN_H_ */

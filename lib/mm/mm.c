@@ -262,7 +262,7 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
  */
 errval_t mm_alloc(struct mm *mm, size_t size, struct capref *retcap)
 {
-    return mm_alloc_aligned(mm, size, BASE_PAGE_SIZE, retcap);
+    return mm_alloc_aligned(mm, size, 4u * BASE_PAGE_SIZE, retcap);
 }
 
 /**

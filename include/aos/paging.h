@@ -61,6 +61,8 @@ struct paging_node {
     struct paging_node* next;
 };
 
+typedef errval_t (*mapping_cb_t) (void*, struct capref);
+
 // struct to store the paging status of a process
 struct paging_state {
     struct slot_allocator* slot_alloc;
@@ -79,6 +81,10 @@ struct paging_state {
 
     // Cap to the L1 pagetable of the owner process.
     struct capref l1_pagetable;
+
+    // Callbacks for child processes' caps.
+    mapping_cb_t mapping_cb;
+    void* mapping_state;
 };
 
 struct thread;

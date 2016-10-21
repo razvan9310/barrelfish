@@ -49,6 +49,8 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr,
 {
     debug_printf("paging_init_state %p\n", st);
 
+    st->mapping_cb = NULL;
+
     // M2:
     // Slot allocator.
     st->slot_alloc = ca;
@@ -69,17 +71,13 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr,
     size_t capacity = (size_t) (0xFFFFFFFF - start_vaddr);
     // Four initial empty nodes.
     st->head = (struct paging_node*) slab_alloc(&st->slabs);
-    printf("paging state: %p, st->head: %p\n", st, st->head);
     st->head->base = start_vaddr;
     st->head->size = capacity;
     st->head->type = NodeType_Free;
     st->head->prev = NULL;
 
     // Default L1 pagetable.
-    st->l1_pagetable.cnode = cnode_page;
-    st->l1_pagetable.slot = 0;
-
-    // TODO: What should we do with pdir?
+    st->l1_pagetable = pdir;
 
     // TODO (M4): Implement page fault handler that installs frames when a page fault
     // occurs and keeps track of the virtual address space.
@@ -96,8 +94,11 @@ errval_t paging_init(void)
 
     // M2:
     // TODO: Where should the pdir capref come from?
-    struct capref pdir;
-    paging_init_state(&current, VADDR_OFFSET, pdir,
+    struct capref l1_cap = {
+        .cnode = cnode_page,
+        .slot = 0
+    };
+    paging_init_state(&current, VADDR_OFFSET, l1_cap,
             get_default_slot_allocator());
     set_current_paging_state(&current);
 
@@ -194,7 +195,6 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes)
     while (node != NULL) {
         if (node->type == NodeType_Free && node->size >= bytes) {
             *buf = (void*) node->base;
-            printf("found free node at base %u\n", node->base);
             return SYS_ERR_OK;
         }
         node = node->next;
@@ -330,13 +330,21 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                 // Map newly created L2 to L1.
                 struct capref l2_to_l1;
                 st->slot_alloc->alloc(st->slot_alloc, &l2_to_l1);
-                printf("(1) vnode_map to dest slot %u\n", st->l1_pagetable);
                 err = vnode_map(st->l1_pagetable, l2_cap, l2_index,
                         VREGION_FLAGS_READ_WRITE, 0, 1, l2_to_l1);
                 if (err_is_fail(err)) {
                     DEBUG_ERR(err, "Mapping L2 to L1");
                     return err;
                 }
+
+                if (st->mapping_cb) {
+                    err = st->mapping_cb(st->mapping_state, l2_to_l1);
+                    if (err_is_fail(err)) {
+                        // DEBUG_ERR(err, "Copying mapping l2_to_l1 to child");
+                        return err;
+                    }
+                }
+
                 st->l2_pagetables[l2_index].cap = l2_cap;
                 st->l2_pagetables[l2_index].initialized = true;
             }
@@ -348,12 +356,9 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                     ? bytes
                     : l2_entries_left * BASE_PAGE_SIZE;
 
-            printf("PAGING: %p %u %u\n", st, l2_index, frame_index);
-
             /* Step 3: Perform mapping. */
             struct capref frame_to_l2;
             st->slot_alloc->alloc(st->slot_alloc, &frame_to_l2);
-            printf("(2) vnode_map to dest slot %u\n", l2_cap);
             err = vnode_map(l2_cap,
                     frame/*cap_to_map*/,
                     frame_index,
@@ -362,8 +367,16 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                     size_to_map / BASE_PAGE_SIZE,
                     frame_to_l2);
             if (err_is_fail(err)) {
-                DEBUG_ERR(err, "Mapping frame to L2");
+                // DEBUG_ERR(err, "Mapping frame to L2");
                 return err;
+            }
+
+            if (st->mapping_cb) {
+                err = st->mapping_cb(st->mapping_state, frame_to_l2);
+                if (err_is_fail(err)) {
+                    DEBUG_ERR(err, "Copying mapping frame_to_l2 to child");
+                    return err;
+                }
             }
 
             mapped_size += size_to_map;
