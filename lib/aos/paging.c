@@ -333,14 +333,14 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                 err = vnode_map(st->l1_pagetable, l2_cap, l2_index,
                         VREGION_FLAGS_READ_WRITE, 0, 1, l2_to_l1);
                 if (err_is_fail(err)) {
-                    DEBUG_ERR(err, "Mapping L2 to L1");
+                    // DEBUG_ERR(err, "Mapping L2 to L1");
                     return err;
                 }
 
                 if (st->mapping_cb) {
                     err = st->mapping_cb(st->mapping_state, l2_to_l1);
                     if (err_is_fail(err)) {
-                        // DEBUG_ERR(err, "Copying mapping l2_to_l1 to child");
+                        DEBUG_ERR(err, "Copying mapping l2_to_l1 to child");
                         return err;
                     }
                 }

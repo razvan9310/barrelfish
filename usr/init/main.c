@@ -67,9 +67,8 @@ int main(int argc, char *argv[])
     }
 
     // spawn a few helloz
-    for (size_t run = 0; run < 2; ++run) {
-        spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    }
+    spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
 
     debug_printf("Message handler loop\n");
