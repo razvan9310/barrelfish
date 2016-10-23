@@ -410,7 +410,7 @@ errval_t setup_vspace(struct spawninfo* si)
     // 5. Setup child's paging state.
     CHECK("child paging state",
             paging_init_state(&si->pg_state,
-                    /*VADDR_OFFSET*/ 0u,
+                    /*VADDR_OFFSET*/ 0x00001000,
                     si->l1_pagetable_me,
                     get_default_slot_allocator()));
     si->pg_state.mapping_cb = &mapping_cb;
@@ -487,7 +487,7 @@ errval_t setup_dispatcher(struct spawninfo* si)
     CHECK("dispatcher frame",
             frame_alloc(&si->dispatcher_frame, DISPATCHER_SIZE, &retsize));
 
-    // 4. Copy everything over to child's vspace.
+    // 4. Copy everything over to child's cspace.
     struct capref dispatcher_child = {
         .cnode = si->l2_cnodes[ROOTCN_SLOT_TASKCN],
         .slot = TASKCN_SLOT_DISPATCHER
@@ -558,6 +558,8 @@ errval_t setup_dispatcher(struct spawninfo* si)
     disp_gen->eh_frame_size = 0;
     disp_gen->eh_frame_hdr = 0;
     disp_gen->eh_frame_hdr_size = 0;
+
+    sys_debug_flush_cache();
 
     return SYS_ERR_OK;
 }

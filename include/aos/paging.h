@@ -101,6 +101,8 @@ struct paging_region {
     lvaddr_t current_addr;
     size_t region_size;
     // TODO: if needed add struct members for tracking state
+    struct paging_state* st;
+    bool mapped;
 };
 
 errval_t paging_region_init(struct paging_state *st,

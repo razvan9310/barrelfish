@@ -128,7 +128,12 @@ void paging_init_onthread(struct thread *t)
 errval_t paging_region_init(struct paging_state *st, struct paging_region *pr, size_t size)
 {
     void *base;
+    // TODO: This looks like a bug: calling paging_alloc directly should not
+    // return a virtual memory area that has also been MAPPED TO. Or, conversely,
+    // paging_map_frame_attr should not call both paging_alloc & paging_map_fixed_attr.
+    // TODO: This is now worked around by mapping in paging_region_map.
     errval_t err = paging_alloc(st, &base, size);
+
     if (err_is_fail(err)) {
         debug_printf("paging_region_init: paging_alloc failed\n");
         return err_push(err, LIB_ERR_VSPACE_MMU_AWARE_INIT);
@@ -136,6 +141,8 @@ errval_t paging_region_init(struct paging_state *st, struct paging_region *pr, s
     pr->base_addr    = (lvaddr_t)base;
     pr->current_addr = pr->base_addr;
     pr->region_size  = size;
+    pr->st = st;
+    pr->mapped = false;
     return SYS_ERR_OK;
 }
 
@@ -147,6 +154,25 @@ errval_t paging_region_init(struct paging_state *st, struct paging_region *pr, s
 errval_t paging_region_map(struct paging_region *pr, size_t req_size,
                            void **retbuf, size_t *ret_size)
 {
+    if (!pr->mapped) {
+        // Need to map some phys mem here before we can return a pointer.
+        struct capref frame;
+        size_t retsize;
+        errval_t err = frame_alloc(&frame, req_size, &retsize);
+        if (err_is_fail(err)) {
+            return err_push(err, LIB_ERR_VSPACE_MMU_AWARE_MAP);
+        }
+
+        err = paging_map_frame(pr->st, (void**) &pr->base_addr, retsize,
+                frame, NULL, NULL);
+        if (err_is_fail(err)) {
+            return err_push(err, LIB_ERR_VSPACE_MMU_AWARE_MAP);
+        }
+
+        pr->region_size = retsize;
+        pr->mapped = true;
+    }
+
     lvaddr_t end_addr = pr->base_addr + pr->region_size;
     ssize_t rem = end_addr - pr->current_addr;
     if (rem > req_size) {

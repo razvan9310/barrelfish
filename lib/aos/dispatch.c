@@ -161,7 +161,7 @@ void disp_lrpc(struct lmp_endpoint *ep, uint32_t bufpos,
  */
 void disp_init_disabled(dispatcher_handle_t handle)
 {
-    // assert_disabled(handle != 0);
+    assert_disabled(handle != 0);
     struct dispatcher_generic* disp_gen = get_dispatcher_generic(handle);
     struct dispatcher_shared_generic* disp =
         get_dispatcher_shared_generic(handle);
