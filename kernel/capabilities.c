@@ -489,6 +489,10 @@ static errval_t caps_zero_objects(enum objtype type, lpaddr_t lpaddr,
         debug(SUBSYS_CAPS, "Frame: zeroing %zu bytes @%#"PRIxLPADDR"\n",
                 (size_t)objsize * count, lpaddr);
         memset((void*)lvaddr, 0, objsize * count);
+        dmb();
+        /* Clean the whole L1 - we've trashed most of it anyway. */
+        clean_data_caches_pouu();
+        dmb();
         break;
 
     case ObjType_L1CNode:
@@ -497,6 +501,12 @@ static errval_t caps_zero_objects(enum objtype type, lpaddr_t lpaddr,
                 type == ObjType_L1CNode ? 1 : 2, (size_t)objsize * count,
                 lpaddr);
         memset((void*)lvaddr, 0, objsize * count);
+        dmb();
+        cache_range_op((void *)lvaddr,
+                       (void *)(lvaddr +
+                                ((uint32_t)objsize * count - 1)),
+                       CLEAN_TO_POU);
+        dmb();
         break;
 
     case ObjType_VNode_ARM_l1:
@@ -517,18 +527,33 @@ static errval_t caps_zero_objects(enum objtype type, lpaddr_t lpaddr,
         debug(SUBSYS_CAPS, "VNode: zeroing %zu bytes @%#"PRIxLPADDR"\n",
                 (size_t)objsize * count, lpaddr);
         memset((void*)lvaddr, 0, objsize * count);
+        dmb();
+        clean_data_caches_pouu();
+        dmb();
         break;
 
     case ObjType_Dispatcher:
         debug(SUBSYS_CAPS, "Dispatcher: zeroing %zu bytes @%#"PRIxLPADDR"\n",
                 ((size_t)1 << OBJBITS_DISPATCHER) * count, lpaddr);
         memset((void*)lvaddr, 0, (1UL << OBJBITS_DISPATCHER) * count);
+        dmb();
+        cache_range_op((void *)lvaddr,
+                       (void *)(lvaddr +
+                                ((1UL << OBJBITS_DISPATCHER)*count - 1)),
+                       CLEAN_TO_POU);
+        dmb();
         break;
 
     case ObjType_KernelControlBlock:
         debug(SUBSYS_CAPS, "KCB: zeroing %zu bytes @%#"PRIxLPADDR"\n",
                 ((size_t)1 << OBJBITS_KCB) * count, lpaddr);
         memset((void*)lvaddr, 0, (1UL << OBJBITS_KCB) * count);
+        dmb();
+        cache_range_op((void *)lvaddr,
+                       (void *)(lvaddr +
+                                ((1UL << OBJBITS_KCB)*count - 1)),
+                       CLEAN_TO_POU);
+        dmb();
         break;
 
     default:

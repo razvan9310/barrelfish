@@ -79,7 +79,8 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
 
 /**
  * \brief Initialize given rpc channel.
- * TODO: you may want to change the inteface of your init function
+ * TODO: you may want to change the inteface of your init function, depending
+ * on how you design your message passing code.
  */
 errval_t aos_rpc_init(struct aos_rpc *rpc);
 
