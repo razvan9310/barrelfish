@@ -7,23 +7,6 @@
 #include <barrelfish_kpi/domain_params.h>
 #include <spawn/multiboot.h>
 
-#define DPRINT(fmt, args...)  debug_printf("spawn: " fmt "\n", args)
-
-#define CHECK(where, err)  \
-        if (err_is_fail(err)) {  \
-            DPRINT("ERROR %s: %s", where, err_getstring(err));  \
-            return err;  \
-        }
-
-#define CHECK_COND(what, cond, err)  \
-        if (!(cond)) {  \
-            DPRINT("FAIL %s: %s (%s)\n", what, err_getstring(err), #cond);  \
-            return err;  \
-        }
-
-#define STATIC_ARRAY_LENGTH(x) (sizeof(x) / sizeof((x)[0]))
-
-
 extern struct bootinfo *bi;
 
 // void setup_cspace(struct spawninfo *si) {
