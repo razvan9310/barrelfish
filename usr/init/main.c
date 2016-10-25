@@ -50,25 +50,64 @@ int main(int argc, char *argv[])
     }
 
     /* Initialize paging. */
-    err = paging_init();
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "paging_init");
-    }
+    // err = paging_init();
+    // if (err_is_fail(err)) {
+    //     DEBUG_ERR(err, "paging_init");
+    // }
 
     /* Initialize the default slot allocator. */
-    err = slot_alloc_init();
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "slot_alloc_init");
-    }
+    // err = slot_alloc_init();
+    // if (err_is_fail(err)) {
+    //     DEBUG_ERR(err, "slot_alloc_init");
+    // }
 
     err = initialize_ram_alloc();
     if(err_is_fail(err)){
         DEBUG_ERR(err, "initialize_ram_alloc");
     }
 
+    // // ALLOCATE A LOT OF MEMORY TROLOLOLOLO.
+    // struct capref frame;
+    // size_t retsize;
+    // err = frame_alloc(&frame, 900 * 1024 * 1024, &retsize);
+    // if (err_is_fail(err)) {
+    //     DEBUG_ERR(err, "PANIC FRAME ALLOC 64 MB");
+    // } else {
+    //     debug_printf("main.c: was given frame size %u\n", retsize);
+    // }
+    // void* buf;
+    // err = paging_map_frame_attr(get_current_paging_state(),
+    //     &buf, retsize, frame,
+    //     VREGION_FLAGS_READ_WRITE, NULL, NULL);
+    // if (err_is_fail(err)) {
+    //     DEBUG_ERR(err, "PANIC MAPPING 64 MB FRAME");
+    // }
+
+    // debug_printf("main.c: testing memory @ %p\n", buf);
+    // char* cbuf = (char*)buf;
+    // *cbuf = 'J';
+    // sys_debug_flush_cache();
+    // printf("%c\n", *cbuf);
+
+    // cbuf += 225 * 1024 * 1024;
+    // *cbuf = 'K';
+    // sys_debug_flush_cache();
+    // printf("%c\n", *cbuf);
+
+    // cbuf += 225 * 1024 * 1024;
+    // *cbuf = 'L';
+    // sys_debug_flush_cache();
+    // printf("%c\n", *cbuf);
+
+    // cbuf += 225 * 1024 * 1024;
+    // *cbuf = 'M';
+    // sys_debug_flush_cache();
+    // printf("%c\n", *cbuf);
+
     // spawn a few helloz
     spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
 
     debug_printf("Message handler loop\n");

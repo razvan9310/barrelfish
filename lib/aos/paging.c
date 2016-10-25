@@ -58,10 +58,8 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr,
     // Slab allocator. 64 nodes should be enough, as we'll have the Memory
     // Manager up and running before we really start mapping vaddresses.
     slab_init(&st->slabs, sizeof(struct paging_node), slab_default_refill);
-    static char paging_buf[8][sizeof(struct paging_node) * 64];
-    static int i_want_to_die = 0;
-    slab_grow(&st->slabs, paging_buf[i_want_to_die], sizeof(paging_buf[i_want_to_die]));
-    ++i_want_to_die;
+    char* paging_buf = (char*) malloc(64 * sizeof(struct paging_node));
+    slab_grow(&st->slabs, paging_buf, 64 * sizeof(struct paging_node));
 
     // We don't have any L2 pagetables yet, thus make sure the flags are unset.
     for (int i = 0; i < L1_PAGETABLE_ENTRIES; ++i) {
@@ -132,6 +130,10 @@ errval_t paging_region_init(struct paging_state *st, struct paging_region *pr, s
     // return a virtual memory area that has also been MAPPED TO. Or, conversely,
     // paging_map_frame_attr should not call both paging_alloc & paging_map_fixed_attr.
     // TODO: This is now worked around by mapping in paging_region_map.
+    size = ROUND_UP(size, BASE_PAGE_SIZE);
+    if (size == 0) {
+        size = BASE_PAGE_SIZE;
+    }
     errval_t err = paging_alloc(st, &base, size);
 
     if (err_is_fail(err)) {
@@ -163,8 +165,8 @@ errval_t paging_region_map(struct paging_region *pr, size_t req_size,
             return err_push(err, LIB_ERR_VSPACE_MMU_AWARE_MAP);
         }
 
-        err = paging_map_frame(pr->st, (void**) &pr->base_addr, retsize,
-                frame, NULL, NULL);
+        err = paging_map_fixed_attr(pr->st, pr->base_addr, frame, retsize,
+                VREGION_FLAGS_READ_WRITE);
         if (err_is_fail(err)) {
             return err_push(err, LIB_ERR_VSPACE_MMU_AWARE_MAP);
         }
@@ -220,7 +222,25 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes)
     struct paging_node *node = st->head;
     while (node != NULL) {
         if (node->type == NodeType_Free && node->size >= bytes) {
+            // Claim the node.
             *buf = (void*) node->base;
+            node->type = NodeType_Claimed;
+
+            if (node->size > bytes) {
+                // Split it.
+                struct paging_node *new_node = (struct paging_node*) slab_alloc(&st->slabs);
+                new_node->type = NodeType_Free;
+                new_node->base = node->base + bytes;
+                new_node->size = node->size - bytes;
+                new_node->next = node->next;
+                new_node->prev = node;
+                if (node->next != NULL) {
+                    node->next->prev = new_node;
+                }
+                node->next = new_node;
+                node->size = bytes;
+            }
+
             return SYS_ERR_OK;
         }
         node = node->next;
@@ -256,16 +276,11 @@ errval_t paging_map_frame_attr(struct paging_state *st, void **buf,
 errval_t
 slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref frame, size_t minbytes)
 {
-    void *buf;
-    errval_t err = paging_map_frame(
-            get_current_paging_state(),
-            &buf,
-            minbytes,
-            frame,
-            NULL, NULL);
-    if (err_is_fail(err)) {
-        return err;
+    minbytes = ROUND_UP(minbytes, BASE_PAGE_SIZE);
+    if (minbytes == 0) {
+        minbytes = BASE_PAGE_SIZE;
     }
+    void* buf = malloc(minbytes);
     slab_grow(slabs, buf, minbytes);
     return SYS_ERR_OK;
 }
@@ -286,7 +301,7 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
             // Couldn't find node, err out.
             return LIB_ERR_VREGION_MAP;
         }
-        if (node->type != NodeType_Free) {
+        if (node->type == NodeType_Allocated) {
             // Skip node if allocated.
             node = node->next;
             continue;
@@ -355,11 +370,15 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
 
                 // Map newly created L2 to L1.
                 struct capref l2_to_l1;
-                st->slot_alloc->alloc(st->slot_alloc, &l2_to_l1);
+                err = st->slot_alloc->alloc(st->slot_alloc, &l2_to_l1);
+                if (err_is_fail(err)) {
+                    DEBUG_ERR(err, "slot_alloc for mapping L2 to L1\n");
+                    return err;
+                }
                 err = vnode_map(st->l1_pagetable, l2_cap, l2_index,
                         VREGION_FLAGS_READ_WRITE, 0, 1, l2_to_l1);
                 if (err_is_fail(err)) {
-                    // DEBUG_ERR(err, "Mapping L2 to L1");
+                    DEBUG_ERR(err, "Mapping L2 to L1");
                     return err;
                 }
 
@@ -384,7 +403,11 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
 
             /* Step 3: Perform mapping. */
             struct capref frame_to_l2;
-            st->slot_alloc->alloc(st->slot_alloc, &frame_to_l2);
+            err = st->slot_alloc->alloc(st->slot_alloc, &frame_to_l2);
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "slot_alloc for mapping frame to L2\n");
+                return err;
+            }
             err = vnode_map(l2_cap,
                     frame/*cap_to_map*/,
                     frame_index,
@@ -393,10 +416,9 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
                     size_to_map / BASE_PAGE_SIZE,
                     frame_to_l2);
             if (err_is_fail(err)) {
-                // DEBUG_ERR(err, "Mapping frame to L2");
+                DEBUG_ERR(err, "Mapping frame to L2");  
                 return err;
             }
-
             if (st->mapping_cb) {
                 err = st->mapping_cb(st->mapping_state, frame_to_l2);
                 if (err_is_fail(err)) {

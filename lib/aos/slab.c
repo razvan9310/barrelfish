@@ -181,7 +181,20 @@ static errval_t slab_refill_pages(struct slab_allocator *slabs, size_t bytes)
     struct capref frame;
     size_t retsize;
     frame_alloc(&frame, bytes, &retsize);
-    return slab_refill_no_pagefault(slabs, frame, retsize);
+
+    void *buf;
+    errval_t err = paging_map_frame(
+            get_current_paging_state(),
+            &buf,
+            retsize,
+            frame,
+            NULL, NULL);
+    if (err_is_fail(err)) {
+        return err;
+    }
+    slab_grow(slabs, buf, retsize);
+
+    return SYS_ERR_OK;
 }
 
 /**

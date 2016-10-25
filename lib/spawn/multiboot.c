@@ -59,6 +59,7 @@ const char *multiboot_module_rawstring(struct mem_region *region)
     }
 
     if (region == NULL || region->mr_type != RegionType_Module) {
+        if (region->mr_type != RegionType_Module) 
         return NULL;
     }
     return multiboot_strings + region->mrmod_data;

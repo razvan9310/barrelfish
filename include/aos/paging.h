@@ -44,11 +44,12 @@ typedef int paging_flags_t;
 #define VREGION_FLAGS_READ_WRITE_MPB \
     (VREGION_FLAGS_READ | VREGION_FLAGS_WRITE | VREGION_FLAGS_MPB)
 
-#define L1_PAGETABLE_ENTRIES 12
+#define L1_PAGETABLE_ENTRIES 4096
 
 enum nodetype {
-    NodeType_Free,     ///< This vregion is free.
-    NodeType_Allocated ///< This vregion has been allocated.
+    NodeType_Free,     ///< This vregion is free (white).
+    NodeType_Claimed,  ///< This vregion has been claimed (gray).
+    NodeType_Allocated ///< This vregion has been allocated (black).
 };
 
 // Metadata about {free, allocated} vregions.
@@ -70,7 +71,7 @@ struct paging_state {
     struct l2_pagetable {
         struct capref cap;
         bool initialized;
-    } l2_pagetables[1 << 12];
+    } l2_pagetables[L1_PAGETABLE_ENTRIES];
 
     // List of vregion metadata.
     struct paging_node* head;
