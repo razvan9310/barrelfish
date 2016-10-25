@@ -24,15 +24,10 @@
 
 __BEGIN_DECLS
 
-// enum nodetype {
-//     NodeType_Free,      ///< This region exists and is free
-//     NodeType_Allocated  ///< This region exists and is allocated
-// };
 
 struct capinfo {
     struct capref cap;
     genpaddr_t base;
-    gensize_t size;
 };
 
 /**
@@ -45,7 +40,6 @@ struct mmnode {
     struct mmnode *next;   ///< Next node in the list.
     genpaddr_t base;       ///< Base address of this region
     gensize_t size;        ///< Size of this free region in cap
-    void *bh;              ///< Slab block head that gave this node.
 };
 
 /**
@@ -60,19 +54,13 @@ struct mm {
     slot_refill_t slot_refill;   ///< Slot allocator refill function
     void *slot_alloc_inst;       ///< Opaque instance pointer for slot allocator
     enum objtype objtype;        ///< Type of capabilities stored
-    struct mmnode *head;         ///< Head of doubly-linked list of nodes in order
-    genpaddr_t initial_base;     ///< Base for the initial RAM node.
-    gensize_t initial_size;      ///< Size for the initial RAM node.
-    bool slab_refilling;         ///< Whether slab is being refilled.
-    bool slot_refilling;         ///< Whether slots are being refilled.
+    struct mmnode head;          ///< Head of doubly-linked list of nodes in order
+                                 ///    head doesn't hold data -- acts as a sentinel
+
+    bool slabs_refilling;
+    bool slots_refilling;
 };
 
-void add_node(struct mmnode **head, struct mmnode *node);
-void remove_node(struct mm *mm, struct mmnode *node);
-void merge_nodes(struct mm *mm, struct mmnode *fst, struct mmnode *snd);
-
-void *mm_slab_alloc(struct mm *mm);
-errval_t mm_slot_alloc(struct mm *mm, uint64_t nslots, struct capref *ret);
 errval_t mm_init(struct mm *mm, enum objtype objtype,
                      slab_refill_func_t slab_refill_func,
                      slot_alloc_t slot_alloc_func,

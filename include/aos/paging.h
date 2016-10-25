@@ -49,7 +49,9 @@ typedef int paging_flags_t;
 enum nodetype {
     NodeType_Free,     ///< This vregion is free (white).
     NodeType_Claimed,  ///< This vregion has been claimed (gray).
-    NodeType_Allocated ///< This vregion has been allocated (black).
+    NodeType_Allocated, ///< This vregion has been allocated (black).
+    NodeType_Head,
+    NodeType_Parent
 };
 
 // Metadata about {free, allocated} vregions.

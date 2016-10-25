@@ -54,6 +54,19 @@
 #include <aos/lmp_endpoints.h>
 
 /* XXX: utility macros. not sure where to put these */
+#define CHECK(where, err)                                               \
+        if (err_is_fail(err)) {                                         \
+            debug_printf("ERROR %s: %s\n", where, err_getstring(err));  \
+            return err;                                                 \
+        }
+
+#define CHECK_COND(cond, where, what_to_do)                             \
+        if (!(cond)) {                                                  \
+            debug_printf("ERROR %s (%s)\n", where, #cond);              \
+            what_to_do;                                                 \
+        }
+
+#define DPRINT(fmt, args...) debug_printf("spawn: " fmt "\n", args)
 
 /* Duplicate memory */
 static inline void * memdup(const void *ptr, size_t size) {
@@ -62,6 +75,8 @@ static inline void * memdup(const void *ptr, size_t size) {
     memcpy(res, ptr, size);
     return res;
 }
+
+#define STATIC_ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 
 /* XXX: glue junk for old IDC system, to be removed!! */
 
