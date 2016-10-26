@@ -349,6 +349,15 @@ errval_t setup_cspace(struct spawninfo* si)
     CHECK("copying L1Cnode cap to taskcn",\
             cap_copy(taskn_rootcn, si->l1_cnode_cap));
 
+    // 3.1 Set up initep
+    struct capref parent_initep = {
+        .cnode = si->l2_cnodes[ROOTCN_SLOT_TASKCN],
+        .slot = TASKCN_SLOT_INITEP
+    };
+    struct lmp_chan lc;
+    CHECK("err in setting up parent chan\n", lmp_chan_accept(&lc, DEFAULT_LMP_BUF_WORDS, NULL_CAP))
+    CHECK("err in cap copy from local cap\n", cap_copy(parent_initep, lc.local_cap));
+    
     // 4. Allocate some RAM for BASE_PAGE_CN slots.
     struct capref cap = {
         .cnode = si->l2_cnodes[ROOTCN_SLOT_BASE_PAGE_CN]
