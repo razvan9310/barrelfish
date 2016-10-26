@@ -106,23 +106,34 @@ void barrelfish_libc_glue_init(void)
     setvbuf(stderr, ebuf, _IOLBF, sizeof(buf));
 }
 
-errval_t recv_handler(void *arg)
+errval_t send_handler(void *arg)
 {
     struct lmp_chan* lc =(struct lmp_chan*) arg;
-    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    printf("Going into send handler\n");
+    CHECK("lmp_chan_send child",
+            lmp_chan_send1(lc, LMP_FLAG_SYNC, lc->local_cap, 42));
+    return SYS_ERR_OK;
+}
+
+errval_t receive_handler(void *arg)
+{
+    printf("Going into child receive\n");
+    struct lmp_chan* lc =(struct lmp_chan*) arg;
+    struct lmp_recv_msg msg;
+    // printf("msg buflen %d\n", msg.buf.buflen);
     struct capref cap;
     errval_t err = lmp_chan_recv(lc, &msg, &cap);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         // reregister
         lmp_chan_register_recv(lc, get_default_waitset(),
-                MKCLOSURE((void *)recv_handler, arg));
+                MKCLOSURE((void *)receive_handler, arg));
     }
     debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
-    debug_printf("init.c: msg->words[0] = 0x%lx\n", msg.words[0]);
+    debug_printf("init.c: msg->words[0] = %d", msg.words[0]);
     lmp_chan_register_recv(lc, get_default_waitset(),
-            MKCLOSURE((void *)recv_handler, arg));
+            MKCLOSURE((void *)receive_handler, arg));
 
-    return SYS_ERR_OK;
+    return err;
 }
 
 /** \brief Initialise libbarrelfish.
@@ -178,27 +189,42 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     /* allocate lmp channel structure */
     /* create local endpoint */
     /* set remote endpoint to init's endpoint */
-    debug_printf("JJJJJJJJ: init.c: In child process!!\n");
     struct lmp_chan lc;
     CHECK("lmp_chan_accept child",
             lmp_chan_accept(&lc, DEFAULT_LMP_BUF_WORDS, cap_initep));
 
-    /* set receive handler */
+    // /* set send handler */
+    CHECK("lmp_chan_register_send child",
+            lmp_chan_register_send(&lc,
+                    get_default_waitset(),
+                    MKCLOSURE((void *)send_handler, &lc)));
+
     CHECK("lmp_chan_register_recv child",
             lmp_chan_register_recv(&lc,
                     get_default_waitset(),
-                    MKCLOSURE((void *)recv_handler, &lc)));
+                    MKCLOSURE((void *)receive_handler, &lc)));
 
-    /* send local ep to init */
-    CHECK("lmp_chan_send child",
-            lmp_chan_send0(&lc, LMP_FLAG_SYNC, lc.local_cap));
+    // printf("!!! BEFORE WHILE\n");
+    err = event_dispatch(default_ws);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "in event_dispatch");
+        abort();
+    }
+    debug_printf("init.c: child process received event with err %d\n", err);
 
-    /* wait for init to acknowledge receiving the endpoint */
-    err = 1;
-    do {
-        wait_for_channel(get_default_waitset(), &lc.endpoint->waitset_state,
-                &err);
-    } while (err != SYS_ERR_OK);
+    err = event_dispatch(default_ws);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "in event_dispatch");
+        abort();
+    }
+    debug_printf("init.c: child process received event with err %d\n", err);
+
+    // /* wait for init to acknowledge receiving the endpoint */
+    // err = 1;
+    // do {
+    //     wait_for_channel(get_default_waitset(), &lc.endpoint->waitset_state,
+    //             &err);
+    // } while (err != SYS_ERR_OK);
 
     /* initialize init RPC client with lmp channel */
     /* set init RPC client in our program state */

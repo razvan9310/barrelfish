@@ -18,7 +18,7 @@
 struct spawn_domain_params;
 errval_t barrelfish_init_onthread(struct spawn_domain_params *params);
 void barrelfish_libc_glue_init(void);
-
-errval_t recv_handler(void *arg);
+errval_t send_handler(void *arg);
+errval_t receive_handler(void *arg);
 
 #endif

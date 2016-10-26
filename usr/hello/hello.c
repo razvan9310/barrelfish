@@ -15,9 +15,11 @@
 
 
 #include <stdio.h>
+#include <aos/aos.h>
 
 int main(int argc, char *argv[])
 {
     printf("Hello, world! from THE BAWS\n");
+    
     return 0;
 }
