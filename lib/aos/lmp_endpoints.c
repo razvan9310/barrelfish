@@ -96,6 +96,7 @@ void lmp_endpoint_free(struct lmp_endpoint *ep)
 errval_t lmp_endpoint_create_in_slot(size_t buflen, struct capref dest,
                                      struct lmp_endpoint **retep)
 {
+    //debug_printf("Going into lmp_endpoint_create_in_slot buflen: %u, slot: %d, %d\n", buflen, dest.slot, (*retep == NULL));
     struct lmp_endpoint *ep = NULL;
     errval_t err;
 
