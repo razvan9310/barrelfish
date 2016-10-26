@@ -106,6 +106,25 @@ void barrelfish_libc_glue_init(void)
     setvbuf(stderr, ebuf, _IOLBF, sizeof(buf));
 }
 
+errval_t recv_handler(void *arg)
+{
+    struct lmp_chan* lc =(struct lmp_chan*) arg;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct capref cap;
+    errval_t err = lmp_chan_recv(lc, &msg, &cap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // reregister
+        lmp_chan_register_recv(lc, get_default_waitset(),
+                MKCLOSURE((void *)recv_handler, arg));
+    }
+    debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
+    debug_printf("init.c: msg->words[0] = 0x%lx\n", msg.words[0]);
+    lmp_chan_register_recv(lc, get_default_waitset(),
+            MKCLOSURE((void *)recv_handler, arg));
+
+    return SYS_ERR_OK;
+}
+
 /** \brief Initialise libbarrelfish.
  *
  * This runs on a thread in every domain, after the dispatcher is setup but
@@ -159,9 +178,28 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     /* allocate lmp channel structure */
     /* create local endpoint */
     /* set remote endpoint to init's endpoint */
+    debug_printf("JJJJJJJJ: init.c: In child process!!\n");
+    struct lmp_chan lc;
+    CHECK("lmp_chan_accept child",
+            lmp_chan_accept(&lc, DEFAULT_LMP_BUF_WORDS, cap_initep));
+
     /* set receive handler */
+    CHECK("lmp_chan_register_recv child",
+            lmp_chan_register_recv(&lc,
+                    get_default_waitset(),
+                    MKCLOSURE((void *)recv_handler, &lc)));
+
     /* send local ep to init */
+    CHECK("lmp_chan_send child",
+            lmp_chan_send0(&lc, LMP_FLAG_SYNC, lc.local_cap));
+
     /* wait for init to acknowledge receiving the endpoint */
+    err = 1;
+    do {
+        wait_for_channel(get_default_waitset(), &lc.endpoint->waitset_state,
+                &err);
+    } while (err != SYS_ERR_OK);
+
     /* initialize init RPC client with lmp channel */
     /* set init RPC client in our program state */
 

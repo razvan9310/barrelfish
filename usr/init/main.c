@@ -105,9 +105,10 @@ int main(int argc, char *argv[])
     // printf("%c\n", *cbuf);
 
     // spawn a few helloz
+    CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher,0, ObjType_EndPoint, 0, 1));
     spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    //spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    //spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
 
     debug_printf("Message handler loop\n");
