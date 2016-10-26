@@ -78,6 +78,15 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
                                       domainid_t **pids, size_t *pid_count);
 
 /**
+ * \brief Gets a capability to device registers
+ * \param rpc  the rpc channel
+ * \param paddr physical address of the device
+ * \param bytes number of bytes of the device memory
+ * \param frame returned devframe
+ */
+errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc, lpaddr_t paddr, size_t bytes,
+                                struct capref *frame);
+/**
  * \brief Initialize given rpc channel.
  * TODO: you may want to change the inteface of your init function, depending
  * on how you design your message passing code.

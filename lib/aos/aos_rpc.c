@@ -73,6 +73,12 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
     return SYS_ERR_OK;
 }
 
+errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc,
+                                lpaddr_t paddr, size_t bytes,
+                                struct capref *frame)
+{
+    return LIB_ERR_NOT_IMPLEMENTED;
+}
 
 errval_t aos_rpc_init(struct aos_rpc *rpc)
 {
