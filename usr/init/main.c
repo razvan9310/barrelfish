@@ -28,6 +28,44 @@
 coreid_t my_core_id;
 struct bootinfo *bi;
 
+errval_t recv_handler(void *arg);
+errval_t parent_send_handler(void *arg);
+
+errval_t recv_handler(void *arg)
+{
+    printf("Going into parent receive\n");
+    struct lmp_chan* lc =(struct lmp_chan*) arg;
+    struct lmp_recv_msg msg;
+    // printf("msg buflen %d\n", msg.buf.buflen);
+    struct capref cap;
+    errval_t err = lmp_chan_recv(lc, &msg, &cap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // reregister
+        lmp_chan_register_recv(lc, get_default_waitset(),
+                MKCLOSURE((void *)recv_handler, arg));
+    }
+    lc->remote_cap = cap;
+    debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
+    debug_printf("init.c: msg->words[0] = %d", msg.words[0]);
+    CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
+    CHECK("lmp_chan_register_send parent", lmp_chan_register_send(lc,
+                get_default_waitset(),
+                MKCLOSURE((void *)parent_send_handler, lc)));
+    lmp_chan_register_recv(lc, get_default_waitset(),
+            MKCLOSURE((void *)recv_handler, arg));
+
+    return err;
+}
+
+errval_t parent_send_handler(void *arg)
+{
+    struct lmp_chan* lc =(struct lmp_chan*) arg;
+    printf("Going into send handler\n");
+    CHECK("lmp_chan_send parent",
+            lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, 43));
+    return SYS_ERR_OK;
+}
+
 int main(int argc, char *argv[])
 {
     errval_t err;
@@ -65,6 +103,18 @@ int main(int argc, char *argv[])
     if(err_is_fail(err)){
         DEBUG_ERR(err, "initialize_ram_alloc");
     }
+
+    CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
+
+    struct lmp_chan parent_chan;
+    CHECK("Create channel for parent", lmp_chan_accept(&parent_chan, DEFAULT_LMP_BUF_WORDS, NULL_CAP));
+
+    CHECK("Create Slot", lmp_chan_alloc_recv_slot(&parent_chan));
+    CHECK("COpy to initep", cap_copy(cap_initep, parent_chan.local_cap));
+
+    CHECK("lmp_chan_register_recv child", lmp_chan_register_recv(&parent_chan,
+                get_default_waitset(),
+                MKCLOSURE((void *)recv_handler, &parent_chan)));
 
     // // ALLOCATE A LOT OF MEMORY TROLOLOLOLO.
     // struct capref frame;
@@ -105,9 +155,8 @@ int main(int argc, char *argv[])
     // printf("%c\n", *cbuf);
 
     // spawn a few helloz
-    CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher,0, ObjType_EndPoint, 0, 1));
     spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    //spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     //spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     //spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
@@ -117,6 +166,7 @@ int main(int argc, char *argv[])
     struct waitset *default_ws = get_default_waitset();
     while (true) {
         err = event_dispatch(default_ws);
+        printf("Out of pooling %d\n", err);
         if (err_is_fail(err)) {
             DEBUG_ERR(err, "in event_dispatch");
             abort();

@@ -830,6 +830,7 @@ errval_t waitset_chan_trigger_disabled(struct waitset_chanstate *chan,
     if (chan->state == CHAN_IDLE) {
         dequeue(&ws->idle, chan);
     } else {
+        //printf("%d\n", chan->state);
         assert_disabled(chan->state == CHAN_POLLED);
         dequeue(&ws->polled, chan);
         dequeue_polled(&get_dispatcher_generic(handle)->polled_channels, chan);

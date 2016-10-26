@@ -109,7 +109,7 @@ static inline errval_t lmp_chan_recv(struct lmp_chan *lc,
                                      struct capref *cap)
 {
     assert(msg != NULL);
-    assert(msg->buf.buflen == LMP_MSG_LENGTH);
+    //assert(msg->buf.buflen == LMP_MSG_LENGTH);
     return lmp_endpoint_recv(lc->endpoint, &msg->buf, cap);
 }
 

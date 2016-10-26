@@ -378,13 +378,13 @@ errval_t lmp_endpoint_recv(struct lmp_endpoint *ep, struct lmp_recv_buf *buf,
     }
 
     uint32_t pos = ep->k.consumed;
+    printf("pos : %d buflen: %d\n", pos, ep->buflen);
     assert(pos < ep->buflen);
 
     /* look at the header first */
     union lmp_recv_header header;
     header.raw = ep->k.buf[pos];
     buf->msglen = header.x.length;
-
     if (header.x.length >= ep->buflen) {
         USER_PANIC("lmp_endpoint_recv: insane message (%u words @ %"PRIu32")."
                    " delivered=%"PRIu32" consumed=%"PRIu32" len=%"PRIu32"\n",
