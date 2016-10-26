@@ -108,6 +108,7 @@ int main(int argc, char *argv[])
     spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
 
     debug_printf("Message handler loop\n");
