@@ -160,9 +160,43 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     struct aos_rpc* rpc = (struct aos_rpc*) malloc(sizeof(struct aos_rpc));
     CHECK("init.c#barrelfish_init_onthread: aos_rpc_init",
             aos_rpc_init(rpc, get_default_waitset()));
+    debug_printf("init.c: successfully setup connection with init\n");
     // Set domain init rpc.
     set_init_rpc(rpc);
 
+    struct capref frame;
+    size_t retsize;
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
+            aos_rpc_get_ram_cap(rpc, BASE_PAGE_SIZE, &frame, &retsize));
+
+    void* buf;
+    err = paging_map_frame_attr(get_current_paging_state(),
+        &buf, retsize, frame,
+        VREGION_FLAGS_READ_WRITE, NULL, NULL);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "PANIC MAPPING 4K FRAME IN CHILD");
+    }
+
+    debug_printf("init.c: testing memory @ %p\n", buf);
+    char* cbuf = (char*)buf;
+    *cbuf = 'J';
+    sys_debug_flush_cache();
+    debug_printf("%c\n", *cbuf);
+
+    cbuf += 1024;
+    *cbuf = 'K';
+    sys_debug_flush_cache();
+    debug_printf("%c\n", *cbuf);
+
+    cbuf += 1024;
+    *cbuf = 'L';
+    sys_debug_flush_cache();
+    debug_printf("%c\n", *cbuf);
+
+    cbuf += 1024;
+    *cbuf = 'M';
+    sys_debug_flush_cache();
+    debug_printf("%c\n", *cbuf);
 
     // right now we don't have the nameservice & don't need the terminal
     // and domain spanning, so we return here

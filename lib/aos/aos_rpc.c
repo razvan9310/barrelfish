@@ -68,9 +68,7 @@ errval_t aos_rpc_ram_recv(void* arg)
         *rpc->rcs.ret_bytes = msg.words[2];
     }
 
-    // Reregister.
-    lmp_chan_register_recv(&rpc->lc, rpc->ws,
-            MKCLOSURE((void*) aos_rpc_ram_recv, arg));
+    // No need to reregister, we got our RAM.
     return err;
 }
 
@@ -81,6 +79,10 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t request_bytes,
     chan->rcs.retcap = retcap;
     chan->rcs.req_bytes = request_bytes;
     chan->rcs.ret_bytes = ret_bytes;
+
+    // Allocate recv slot.
+    CHECK("aos_rpc.c#aos_rpc_get_ram_cap: lmp_chan_alloc_recv_slot",
+            lmp_chan_alloc_recv_slot(&chan->lc));
 
     // Perform RPC. On success, this will make the provided capref pointer point
     // to the newly allocated memory region.
@@ -135,7 +137,8 @@ errval_t aos_rpc_handshake_send(void* arg)
 {
     struct aos_rpc *rpc = (struct aos_rpc*) arg;
     CHECK("aos_rpc.c#aos_rpc_handshake_send: lmp_chan_send0",
-            lmp_chan_send0(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap));
+            lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                    AOS_RPC_HANDSHAKE));
     return SYS_ERR_OK;
 }
 
@@ -159,9 +162,7 @@ errval_t aos_rpc_handshake_recv(void* arg)
     assert(msg.buf.msglen == 1);
     assert(msg.words[0] == AOS_RPC_OK);
 
-    // Reregister.
-    lmp_chan_register_recv(&rpc->lc, rpc->ws,
-            MKCLOSURE((void*) aos_rpc_handshake_recv, arg));
+    // No need to rereister here, as handshake is complete;
     return err;
 }
 
@@ -172,22 +173,28 @@ errval_t aos_rpc_send_and_receive(struct aos_rpc* rpc, void* send_handler,
         void* rcv_handler)
 {
     // 1. Set send handler.
+    debug_printf("aos_rpc.c: send_and_receive register_send\n");
     CHECK("aos_rpc.c#aos_rpc_send_and_receive: lmp_chan_register_send",
             lmp_chan_register_send(&rpc->lc, rpc->ws,
                     MKCLOSURE(send_handler, rpc)));
 
     // 2. Set receive handler.
+    debug_printf("aos_rpc.c: send_and_receive register_recv\n");
     CHECK("aos_rpc.c#aos_rpc_send_and_receive: lmp_chan_register_recv",
             lmp_chan_register_recv(&rpc->lc, rpc->ws,
                     MKCLOSURE(rcv_handler, rpc)));
 
     // 3. Block until channel is ready to send.
+    debug_printf("aos_rpc.c: send_and_receive dispatch send\n");
     CHECK("aos_rpc.c#aos_rpc_send_and_receive: event_dispatch send",
             event_dispatch(rpc->ws));
 
     // 4. Block until channel is ready to receive.
+    debug_printf("aos_rpc.c: send_and_receive dispatch recv\n");
     CHECK("aos_rpc.c#aos_rpc_send_and_receive: event_dispatch receive",
             event_dispatch(rpc->ws));
+
+    debug_printf("aos_rpc.c: send_and_receive register_recv OK\n");
 
     return SYS_ERR_OK;
 }

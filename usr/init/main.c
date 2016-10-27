@@ -29,40 +29,75 @@
 coreid_t my_core_id;
 struct bootinfo *bi;
 
-errval_t recv_handler(void *arg);
-errval_t parent_send_handler(void *arg);
+errval_t recv_handler(void* arg);
+errval_t parent_send_handshake(void* arg);
+errval_t parent_send_memory(void* arg);
 
 errval_t recv_handler(void *arg)
 {
-    struct lmp_chan* lc =(struct lmp_chan*) arg;
+    struct aos_rpc* rpc = (struct aos_rpc*) arg;
     struct lmp_recv_msg msg;
     // printf("msg buflen %d\n", msg.buf.buflen);
     struct capref cap;
-    errval_t err = lmp_chan_recv(lc, &msg, &cap);
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         // reregister
-        lmp_chan_register_recv(lc, get_default_waitset(),
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
                 MKCLOSURE((void *)recv_handler, arg));
     }
 
-    lc->remote_cap = cap;
-    debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
-    debug_printf("init.c: msg->words[0] = %d\n", msg.words[0]);
-    CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
-    CHECK("lmp_chan_register_send parent", lmp_chan_register_send(lc,
-                get_default_waitset(),
-                MKCLOSURE((void *)parent_send_handler, lc)));
-    lmp_chan_register_recv(lc, get_default_waitset(),
+    debug_printf("main.c: got message of size %u\n", msg.buf.msglen);
+    if (msg.buf.msglen > 0) {
+        void* response;
+        debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
+        debug_printf("init.c: msg->words[0] = %d\n", msg.words[0]);
+        switch (msg.words[0]) {
+            case AOS_RPC_HANDSHAKE:
+                rpc->lc.remote_cap = cap;
+                response = (void*) parent_send_handshake;
+                break;
+            case AOS_RPC_MEMORY:
+                *rpc->rcs.retcap = cap;
+                rpc->rcs.req_bytes = msg.words[1];
+                response = (void*) parent_send_memory;
+                break;
+            default:
+                return 1;  // TODO: More meaning plz
+        }
+
+        CHECK("lmp_chan_register_send parent",
+                lmp_chan_register_send(&rpc->lc, rpc->ws,
+                        MKCLOSURE(response, arg)));  
+    }
+
+    // Reregister.
+    CHECK("Create Slot", lmp_chan_alloc_recv_slot(&rpc->lc));
+    lmp_chan_register_recv(&rpc->lc, rpc->ws,
             MKCLOSURE((void *)recv_handler, arg));
 
     return err;
 }
 
-errval_t parent_send_handler(void *arg)
+errval_t parent_send_handshake(void *arg)
 {
-    struct lmp_chan* lc =(struct lmp_chan*) arg;
-    CHECK("lmp_chan_send parent",
-            lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
+    struct aos_rpc* rpc = (struct aos_rpc*) arg;
+    CHECK("lmp_chan_send handshake",
+            lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
+    return SYS_ERR_OK;
+}
+
+errval_t parent_send_memory(void* arg)
+{
+    struct aos_rpc* rpc = (struct aos_rpc*) arg;
+    assert(rpc->rcs.retcap != NULL);
+    assert(rpc->rcs.ret_bytes != NULL);
+
+    errval_t err = frame_alloc(rpc->rcs.retcap, rpc->rcs.req_bytes,
+            rpc->rcs.ret_bytes);
+    size_t code = err_is_fail(err) ? AOS_RPC_FAILED : AOS_RPC_OK;
+    CHECK("lmp_chan_send memory",
+            lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, *rpc->rcs.retcap,
+                code, (uintptr_t) err, *rpc->rcs.ret_bytes));
     return SYS_ERR_OK;
 }
 
@@ -106,15 +141,22 @@ int main(int argc, char *argv[])
 
     CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
 
-    struct lmp_chan parent_chan;
-    CHECK("Create channel for parent", lmp_chan_accept(&parent_chan, DEFAULT_LMP_BUF_WORDS, NULL_CAP));
+    struct aos_rpc* rpc = (struct aos_rpc*) malloc(sizeof(struct aos_rpc));
+    rpc->ws = get_default_waitset();
+    // TODO: Find a nicer way...
+    struct capref dummy_cap;
+    size_t dummy_size;
+    rpc->rcs.retcap = &dummy_cap;
+    rpc->rcs.ret_bytes = &dummy_size;
 
-    CHECK("Create Slot", lmp_chan_alloc_recv_slot(&parent_chan));
-    CHECK("COpy to initep", cap_copy(cap_initep, parent_chan.local_cap));
+    CHECK("Create channel for parent", lmp_chan_accept(&rpc->lc, DEFAULT_LMP_BUF_WORDS, NULL_CAP));
 
-    CHECK("lmp_chan_register_recv child", lmp_chan_register_recv(&parent_chan,
-                get_default_waitset(),
-                MKCLOSURE((void *)recv_handler, &parent_chan)));
+    CHECK("Create Slot", lmp_chan_alloc_recv_slot(&rpc->lc));
+    CHECK("COpy to initep", cap_copy(cap_initep, rpc->lc.local_cap));
+
+    CHECK("lmp_chan_register_recv child",
+            lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                    MKCLOSURE((void*) recv_handler, rpc)));
 
     // // ALLOCATE A LOT OF MEMORY TROLOLOLOLO.
     // struct capref frame;
