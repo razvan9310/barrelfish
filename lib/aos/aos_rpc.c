@@ -46,7 +46,7 @@ errval_t aos_rpc_ram_send(void* arg)
 errval_t aos_rpc_ram_recv(void* arg)
 {
     struct aos_rpc* rpc = (struct aos_rpc*) arg;
-    struct lmp_recv_msg msg;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
 
     errval_t err = lmp_chan_recv(&rpc->lc, &msg, rpc->rcs.retcap);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
@@ -148,7 +148,7 @@ errval_t aos_rpc_handshake_send(void* arg)
 errval_t aos_rpc_handshake_recv(void* arg)
 {
     struct aos_rpc* rpc = (struct aos_rpc*) arg;
-    struct lmp_recv_msg msg;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;;
     struct capref cap;
 
     errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
