@@ -198,6 +198,56 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     sys_debug_flush_cache();
     debug_printf("%c\n", *cbuf);
 
+    // RPC send number.
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_send_number",
+            aos_rpc_send_number(rpc, 1337));
+
+    // RPC putchar.
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'T'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'H'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'I'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'S'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, ' '));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'I'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'S'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, ' '));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'A'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, ' '));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'F'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, '*'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, '*'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, '*'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'I'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'N'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'G'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, ' '));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'R'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'P'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, 'C'));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+            aos_rpc_serial_putchar(rpc, '\n'));
+
     // right now we don't have the nameservice & don't need the terminal
     // and domain spanning, so we return here
     return SYS_ERR_OK;

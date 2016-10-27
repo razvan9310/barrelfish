@@ -35,7 +35,7 @@ extern cycles_t waitset_poll_cycles;
 
 struct event_closure {
     void (*handler)(void *arg);
-    void **args;
+    void *arg;
 };
 
 #define MKCLOSURE(h,a)  (struct event_closure){ /*handler*/ (h), /*arg*/ (a) }
