@@ -39,6 +39,11 @@ struct aos_rpc {
     } rcs;
 };
 
+errval_t aos_rpc_putchar_send(void** args);
+errval_t aos_rpc_putchar_recv(void** args);
+errval_t aos_rpc_send_number_handler(void **args);
+errval_t aos_rpc_number_recv_handler(void **args);
+
 /**
  * \brief send a number over the given channel
  */
@@ -52,12 +57,12 @@ errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string);
 /**
  * \brief RAM cap request.
  */
-errval_t aos_rpc_ram_send(void* arg);
+errval_t aos_rpc_ram_send(void** arg);
 
 /**
  * \brief RAM cap response.
  */
-errval_t aos_rpc_ram_recv(void* arg);
+errval_t aos_rpc_ram_recv(void** arg);
 
 /**
  * \brief request a RAM capability with >= request_bits of size over the given
@@ -108,12 +113,12 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
 /**
  * \brief Initiate handshake by sending local cap to server.
  */
-errval_t aos_rpc_handshake_send(void* arg);
+errval_t aos_rpc_handshake_send(void** arg);
 
 /**
  * \brief Finalize handshake by receiving ack from server.
  */
-errval_t aos_rpc_handshake_recv(void* arg);
+errval_t aos_rpc_handshake_recv(void** arg);
 
 /**
  * \brief General-purpose blocking RPC send-and-receive function.

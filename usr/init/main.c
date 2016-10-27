@@ -196,6 +196,12 @@ int main(int argc, char *argv[])
     // sys_debug_flush_cache();
     // printf("%c\n", *cbuf);
 
+    // char *a = malloc(sizeof(char));
+    // *a = 'a';
+    // realloc(a, 2*sizeof(char));
+    // printf("Value of char after resize %c\n", *a);
+    // *(a+1) = 'b';
+    // printf("Value of char after resize %c\n", *(a+1));
     // spawn a few helloz
     spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     // spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
