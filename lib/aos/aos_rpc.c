@@ -14,10 +14,53 @@
 
 #include <aos/aos_rpc.h>
 
+/**
+ * \brief Number handler.
+ */
+errval_t aos_rpc_send_number_handler(void **args)
+{
+    // TODO: implement functionality to send a number ofer the channel
+    // given channel and wait until the ack gets returned.
+    struct aos_rpc *rpc = (struct aos_rpc*) args[0];
+    uint32_t *number = (uint32_t*) args[1];
+    CHECK("aos_rpc.c#aos_rpc_send_number_handler: lmp_chan_send3",
+            lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
+                    AOS_RPC_NUMBER, 0, *number));
+
+    return SYS_ERR_OK;
+}
+
+/**
+ * \brief Number response.
+ */
+errval_t aos_rpc_number_recv_handler(void **args)
+{
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, rpc->rcs.retcap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister.
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_number_recv_handler, args));
+    }
+
+    assert(msg.buf.msglen == 1);
+
+    assert(msg.words[0] == AOS_RPC_OK)
+    // No need to reregister, we got our RAM.
+    return err;
+}
+
+
+
 errval_t aos_rpc_send_number(struct aos_rpc *chan, uintptr_t val)
 {
     // TODO: implement functionality to send a number ofer the channel
     // given channel and wait until the ack gets returned.
+    CHECK("aos_rpc.c#aos_rpc_send_number: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(chan, aos_rpc_send_number_handler,
+                    aos_rpc_ram_recv));
     return SYS_ERR_OK;
 }
 
@@ -31,9 +74,9 @@ errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string)
 /**
  * \brief RAM cap request.
  */
-errval_t aos_rpc_ram_send(void* arg)
+errval_t aos_rpc_ram_send(void** args)
 {
-    struct aos_rpc *rpc = (struct aos_rpc*) arg;
+    struct aos_rpc *rpc = (struct aos_rpc*) args[0];
     CHECK("aos_rpc.c#aos_rpc_ram_send: lmp_chan_send0",
             lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, *rpc->rcs.retcap,
                     AOS_RPC_MEMORY, rpc->rcs.req_bytes));
@@ -43,16 +86,16 @@ errval_t aos_rpc_ram_send(void* arg)
 /**
  * \brief RAM cap response.
  */
-errval_t aos_rpc_ram_recv(void* arg)
+errval_t aos_rpc_ram_recv(void** args)
 {
-    struct aos_rpc* rpc = (struct aos_rpc*) arg;
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
 
     errval_t err = lmp_chan_recv(&rpc->lc, &msg, rpc->rcs.retcap);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         // Reregister.
         lmp_chan_register_recv(&rpc->lc, rpc->ws,
-                MKCLOSURE((void*) aos_rpc_ram_recv, arg));
+                MKCLOSURE((void*) aos_rpc_ram_recv, args[0]));
     }
 
     // We should have received:
@@ -103,9 +146,47 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *chan, char *retc)
 
 errval_t aos_rpc_serial_putchar(struct aos_rpc *chan, char c)
 {
-    // TODO implement functionality to send a character to the
-    // serial port.
-    return SYS_ERR_OK;
+   // TODO implement functionality to send a character to the
+   // serial port.
+   CHECK("aos_rpc.c#aos_rpc_serial_putchar: aos_rpc_send_and_receive",
+           aos_rpc_send_and_receive(chan, aos_rpc_putchar_send,
+                   aos_rpc_putchar_recv));
+
+   return SYS_ERR_OK;
+}
+
+errval_t aos_rpc_putchar_send(void** args)
+{
+   struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+   char to_put = args[1];
+
+   struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+   CHECK("aos_rpc.c#aos_rpc_ram_send: lmp_chan_send0",
+           lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
+                   AOS_RPC_PUTCHAR, 0, to_put));
+
+   return SYS_ERR_OK;
+}
+
+errval_t aos_rpc_putchar_recv(void** args)
+{
+   struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+   struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+   errval_t err = lmp_chan_recv(&rpc->lc, &msg, NULL_CAP);
+   if (err_is_fail(err) && lmp_err_is_transient(err)) {
+       // Reregister.
+       lmp_chan_register_recv(&rpc->lc, rpc->ws,
+               MKCLOSURE((void*) aos_rpc_putchar_recv, args));
+   }
+
+   // This should be an ACK only.
+   assert(msg.buf.msglen == 1);
+   assert(msg.words[0] == AOS_RPC_OK);
+
+   return SYS_ERR_OK;
+
 }
 
 errval_t aos_rpc_process_spawn(struct aos_rpc *chan, char *name,
@@ -133,9 +214,9 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
 /**
  * \brief Initiate handshake by sending local cap to server.
  */
-errval_t aos_rpc_handshake_send(void* arg)
+errval_t aos_rpc_handshake_send(void** args)
 {
-    struct aos_rpc *rpc = (struct aos_rpc*) arg;
+    struct aos_rpc *rpc = (struct aos_rpc*) args[0];
     CHECK("aos_rpc.c#aos_rpc_handshake_send: lmp_chan_send0",
             lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
                     AOS_RPC_HANDSHAKE));
@@ -145,9 +226,9 @@ errval_t aos_rpc_handshake_send(void* arg)
 /**
  * \brief Finalize handshake by receiving ack from server.
  */
-errval_t aos_rpc_handshake_recv(void* arg)
+errval_t aos_rpc_handshake_recv(void** args)
 {
-    struct aos_rpc* rpc = (struct aos_rpc*) arg;
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;;
     struct capref cap;
 
@@ -155,7 +236,7 @@ errval_t aos_rpc_handshake_recv(void* arg)
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         // Reregister.
         lmp_chan_register_recv(&rpc->lc, rpc->ws,
-                MKCLOSURE((void*) aos_rpc_handshake_recv, arg));
+                MKCLOSURE((void*) aos_rpc_handshake_recv, args));
     }
 
     // This should be an ACK only.
