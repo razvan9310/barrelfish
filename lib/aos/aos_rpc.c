@@ -14,13 +14,19 @@
 
 #include <aos/aos_rpc.h>
 
+// defined at the end
+uint32_t perf_measurement_get_counter(void);
+
 /**
  * \brief Number handler.
  */
 errval_t aos_rpc_send_number_send_handler(void* void_args)
 {
+    // 0. get cycle counter value
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
     uintptr_t* args = (uintptr_t*) void_args;
-    
+
     // TODO: implement functionality to send a number ofer the channel
     // given channel and wait until the ack gets returned.
     struct aos_rpc *rpc = (struct aos_rpc*) args[0];
@@ -28,6 +34,12 @@ errval_t aos_rpc_send_number_send_handler(void* void_args)
     CHECK("aos_rpc.c#aos_rpc_send_number_handler: lmp_chan_send3",
             lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
                     AOS_RPC_NUMBER, 0, *number));
+
+    // N. get new cycle counter value, show result
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_send_number_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
 
     return SYS_ERR_OK;
 }
@@ -37,8 +49,11 @@ errval_t aos_rpc_send_number_send_handler(void* void_args)
  */
 errval_t aos_rpc_send_number_recv_handler(void* void_args)
 {
+    // 0. get cycle counter value
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
     uintptr_t* args = (uintptr_t*) void_args;
-    
+
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
 
@@ -54,6 +69,13 @@ errval_t aos_rpc_send_number_recv_handler(void* void_args)
 
     assert(msg.words[0] == AOS_RPC_OK);
     // No need to reregister, we got our RAM.
+
+    // N. get new cycle counter value, show result
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_send_number_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
+
     return err;
 }
 
@@ -89,8 +111,11 @@ errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string)
  */
 errval_t aos_rpc_ram_send_handler(void* void_args)
 {
+    // 0. get cycle counter value
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
     uintptr_t* args = (uintptr_t*) void_args;
-    
+
     // 1. aos_rpc
     struct aos_rpc *rpc = (struct aos_rpc*) args[0];
     // 2. request_bytes
@@ -103,6 +128,12 @@ errval_t aos_rpc_ram_send_handler(void* void_args)
     CHECK("aos_rpc.c#aos_rpc_ram_send_handler: lmp_chan_send0",
             lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, *retcap,
                     AOS_RPC_MEMORY, rpc->client_id, *req_bytes));
+
+    // N. get new cycle counter value, show result
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_ram_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
     return SYS_ERR_OK;
 }
 
@@ -111,8 +142,11 @@ errval_t aos_rpc_ram_send_handler(void* void_args)
  */
 errval_t aos_rpc_ram_recv_handler(void* void_args)
 {
+   // 0. get cycle counter value
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
     uintptr_t* args = (uintptr_t*) void_args;
-    
+
     // 1. aos_rpc
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
     // 2. retcap
@@ -132,11 +166,17 @@ errval_t aos_rpc_ram_recv_handler(void* void_args)
     // 2) RAM alloc error code
     // 3) actual returned size, if alloc succeeded.
     assert(msg.buf.msglen >= 3);
-   
+
     if (msg.words[0] == AOS_RPC_OK) {
         // Fill in returnd size.
         size_t* retsize = (size_t*) args[3];
         *retsize = msg.words[2];
+    }
+
+   // N. get new cycle counter value, show result
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_ram_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     // No need to reregister, we got our RAM.
@@ -219,8 +259,11 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *chan, char c)
 
 errval_t aos_rpc_putchar_send_handler(void* void_args)
 {
+    // 0. get cycle counter value
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
     uintptr_t* args = (uintptr_t*) void_args;
-    
+
    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
    char* to_put = (char*) args[1];
 
@@ -228,13 +271,22 @@ errval_t aos_rpc_putchar_send_handler(void* void_args)
            lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
                    AOS_RPC_PUTCHAR, 0, *to_put));
 
+    // N. get new cycle counter value, show result
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_putchar_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
+
    return SYS_ERR_OK;
 }
 
 errval_t aos_rpc_putchar_recv_handler(void* void_args)
 {
+    // 0. get cycle counter value
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
     uintptr_t* args = (uintptr_t*) void_args;
-    
+
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
 
@@ -249,6 +301,12 @@ errval_t aos_rpc_putchar_recv_handler(void* void_args)
     // This should be an ACK only.
     assert(msg.buf.msglen == 1);
     assert(msg.words[0] == AOS_RPC_OK);
+
+    // N. get new cycle counter value, show result
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_putchar_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
 
     return SYS_ERR_OK;
 }
@@ -280,12 +338,22 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
  */
 errval_t aos_rpc_handshake_send_handler(void* void_args)
 {
+    // 0. get cycle counter value
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
     uintptr_t* args = (uintptr_t*) void_args;
-    
+
     struct aos_rpc *rpc = (struct aos_rpc*) args[0];
     CHECK("aos_rpc.c#aos_rpc_handshake_send_handler: lmp_chan_send0",
             lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
                     AOS_RPC_HANDSHAKE));
+
+    // N. get new cycle counter value, show result
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_handshake_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
+
     return SYS_ERR_OK;
 }
 
@@ -294,8 +362,11 @@ errval_t aos_rpc_handshake_send_handler(void* void_args)
  */
 errval_t aos_rpc_handshake_recv_handler(void* void_args)
 {
+    // 0. get cycle counter value
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
     uintptr_t* args = (uintptr_t*) void_args;
-    
+
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;;
     struct capref cap;
@@ -311,6 +382,12 @@ errval_t aos_rpc_handshake_recv_handler(void* void_args)
     assert(msg.buf.msglen == 2);
     assert(msg.words[0] == AOS_RPC_OK);
     rpc->client_id = (uint32_t) msg.words[1];
+
+    // N. get new cycle counter value, show result
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_handshake_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
 
     // No need to rereister here, as handshake is complete;
     return err;
@@ -363,11 +440,17 @@ errval_t aos_rpc_init(struct aos_rpc *rpc, struct waitset* ws)
     CHECK("aos_rpc.c#aos_rpc_init: aos_rpc_send_and_receive",
             aos_rpc_send_and_receive(args, aos_rpc_handshake_send_handler,
                     aos_rpc_handshake_recv_handler));
-    
+
     // 3. Free args.
     free((struct aos_rpc*) args[0]);
     free(args);
 
     // By now we've successfully established the underlying LMP channel for RPC.
     return SYS_ERR_OK;
+}
+
+uint32_t perf_measurement_get_counter(void) {
+    uint32_t counter = 0;
+    __asm__ volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(counter));
+    return counter;
 }

@@ -128,6 +128,16 @@ exceptions_load_stacks(void) {
     set_stack_for_mode(ARM_MODE_SVC, svc_stack   + EXCEPTION_MODE_STACK_BYTES);
 }
 
+// for RPC performance measurement
+static void perf_measurement_init(void) {
+    // source: https://neocontra.blogspot.ch/2013/05/user-mode-performance-counters-for.html
+    /* Enable user-mode access to counters. */
+    __asm__ volatile("mcr p15, 0, %0, c9, c14, 0" :: "r"(1));
+    /* Program PMU and enable all counters */
+    __asm__ volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(1 | 16));
+    __asm__ volatile("mcr p15, 0, %0, c9, c12, 1" :: "r"(0x8000000f));
+}
+
 /**
  * \brief Continue kernel initialization in kernel address space.
  *
@@ -170,6 +180,7 @@ arch_init(struct arm_core_data *boot_core_data,
     my_core_id = cp15_get_cpu_id();
 
     MSG("Barrelfish CPU driver starting on ARMv7\n");
+    perf_measurement_init();
     MSG("Core data at %p\n", core_data);
     MSG("Global data at %p\n", global);
     MSG("Boot record at %p\n", bootrec);
