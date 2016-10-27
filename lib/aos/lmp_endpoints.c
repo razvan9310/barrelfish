@@ -378,7 +378,6 @@ errval_t lmp_endpoint_recv(struct lmp_endpoint *ep, struct lmp_recv_buf *buf,
     }
 
     uint32_t pos = ep->k.consumed;
-    printf("pos : %d buflen: %d\n", pos, ep->buflen);
     assert(pos < ep->buflen);
 
     /* look at the header first */

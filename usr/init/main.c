@@ -33,7 +33,6 @@ errval_t parent_send_handler(void *arg);
 
 errval_t recv_handler(void *arg)
 {
-    printf("Going into parent receive\n");
     struct lmp_chan* lc =(struct lmp_chan*) arg;
     struct lmp_recv_msg msg;
     // printf("msg buflen %d\n", msg.buf.buflen);
@@ -44,9 +43,10 @@ errval_t recv_handler(void *arg)
         lmp_chan_register_recv(lc, get_default_waitset(),
                 MKCLOSURE((void *)recv_handler, arg));
     }
+
     lc->remote_cap = cap;
     debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
-    debug_printf("init.c: msg->words[0] = %d", msg.words[0]);
+    debug_printf("init.c: msg->words[0] = %d\n", msg.words[0]);
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
     CHECK("lmp_chan_register_send parent", lmp_chan_register_send(lc,
                 get_default_waitset(),
@@ -60,7 +60,6 @@ errval_t recv_handler(void *arg)
 errval_t parent_send_handler(void *arg)
 {
     struct lmp_chan* lc =(struct lmp_chan*) arg;
-    printf("Going into send handler\n");
     CHECK("lmp_chan_send parent",
             lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, 43));
     return SYS_ERR_OK;
@@ -156,7 +155,7 @@ int main(int argc, char *argv[])
 
     // spawn a few helloz
     spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    // spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     //spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
 
@@ -165,7 +164,6 @@ int main(int argc, char *argv[])
     struct waitset *default_ws = get_default_waitset();
     while (true) {
         err = event_dispatch(default_ws);
-        printf("Out of pooling %d\n", err);
         if (err_is_fail(err)) {
             DEBUG_ERR(err, "in event_dispatch");
             abort();
