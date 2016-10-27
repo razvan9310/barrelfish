@@ -29,21 +29,24 @@
 coreid_t my_core_id;
 struct bootinfo *bi;
 
+struct lmp_chan* clients = NULL;
+size_t num_conns;
+
 errval_t recv_handler(void* arg);
 errval_t parent_send_handshake(void* arg);
 errval_t parent_send_memory(void* arg);
 
-errval_t recv_handler(void *arg)
+errval_t recv_handler(void** arg)
 {
-    struct aos_rpc* rpc = (struct aos_rpc*) arg;
+    struct lmp_chan** lc = (struct lmp_chan**) arg;
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
     // printf("msg buflen %d\n", msg.buf.buflen);
     struct capref cap;
-    errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
+    errval_t err = lmp_chan_recv(*lc, &msg, &cap);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         // reregister
-        lmp_chan_register_recv(&rpc->lc, rpc->ws,
-                MKCLOSURE((void *)recv_handler, arg));
+        lmp_chan_register_recv(*lc, get_default_waitset(),
+                MKCLOSURE((void* )recv_handler, arg));
     }
 
     debug_printf("main.c: got message of size %u\n", msg.buf.msglen);
@@ -51,53 +54,115 @@ errval_t recv_handler(void *arg)
         void* response;
         debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
         debug_printf("init.c: msg->words[0] = %d\n", msg.words[0]);
+        void** response_args;
         switch (msg.words[0]) {
             case AOS_RPC_HANDSHAKE:
-                rpc->lc.remote_cap = cap;
+                // Create channel for newly connecting client.
+                if (clients == NULL) {
+                    clients = malloc(sizeof(struct lmp_chan));
+                } else {
+                    realloc(clients, (num_conns + 1) * sizeof(struct lmp_chan));
+                }
+                // Initialize dedicated channel.
+                clients[num_conns] = **lc;
+                // Set remote cap.
+                clients[num_conns].remote = cap;
+                // Set response handler to handshake.
                 response = (void*) parent_send_handshake;
+
+                // Fill in response args.
+                response_args = (void**) malloc(2 * sizeof(void*));
+                // First arg is the channel to send the response down.
+                response_args[0] = (struct lmp_chan*) malloc(sizeof(struct lmp_chan))
+                *resopnse_args[0] = clients[num_conns];
+                // Second arg is the 32-bit client tag (ID).
+                response_args[1] = (uint32_t*) malloc(sizeof(uint32_t));
+                *response_args[1] = num_conns;
+                
+                ++num_conns;
                 break;
             case AOS_RPC_MEMORY:
-                *rpc->rcs.retcap = cap;
-                rpc->rcs.req_bytes = msg.words[1];
+                // Send response handler to memory.
                 response = (void*) parent_send_memory;
+
+                uint32_t conn = msg.words[1];
+                // Response args.
+                // 1. Channel to send down.
+                // 2. Client ID.
+                // 3. Cap to fill with memory.
+                // 4. Requested size.
+                response_args = (void**) malloc(4 * sizeof(void*));
+                response_args[0] = (struct lmp_chan*) malloc(sizeof(struct lmp_chan));
+                *response_args[0] = clients[conn];
+
+                response_args[1] = (uint32_t*) malloc(sizeof(uint32_t));
+                *response_args[1] = conn;
+
+                response_args[2] = (struct capref*) malloc(sizeof(struct capref));
+                *response_args[2] = cap;
+
+                response_args[3] = (size_t*) malloc(sizeof(size_t));
+                *response_args[3] = msg.words[2];
+
                 break;
             default:
                 return 1;  // TODO: More meaning plz
         }
 
         CHECK("lmp_chan_register_send parent",
-                lmp_chan_register_send(&rpc->lc, rpc->ws,
-                        MKCLOSURE(response, arg)));  
+                lmp_chan_register_send(lc, get_default_waitset(),
+                        MKCLOSURE(response, response_args)));  
     }
 
     // Reregister.
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(&rpc->lc));
-    lmp_chan_register_recv(&rpc->lc, rpc->ws,
+    lmp_chan_register_recv(&rpc->lc, get_default_waitset(),
             MKCLOSURE((void *)recv_handler, arg));
 
     return err;
 }
 
-errval_t parent_send_handshake(void *arg)
+errval_t parent_send_handshake(void** args)
 {
-    struct aos_rpc* rpc = (struct aos_rpc*) arg;
+    // 1. Get channel to send down.
+    struct lmp_chan* lc = (struct lmp_chan*) args[0];
+    // 2. Get Client ID.
+    uint32_t* client_id = (uint32_t*) args[1];
+
+    // 3. Send response.
     CHECK("lmp_chan_send handshake",
-            lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
+            lmp_chan_send2(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK, *client_id));
+
+    // 4. Free args.
+    free(client_id);
+    free(lc);
+    free(args);
+
     return SYS_ERR_OK;
 }
 
 errval_t parent_send_memory(void* arg)
 {
-    struct aos_rpc* rpc = (struct aos_rpc*) arg;
-    assert(rpc->rcs.retcap != NULL);
-    assert(rpc->rcs.ret_bytes != NULL);
+    // 1. Get channel to send down.
+    struct lmp_chan* lc = (struct lmp_chan*) args[0];
+    // 2. Get Client ID.
+    uint32_t* client_id = (uint32_t*) args[1];
+    // 3. Get cap to fill.
+    struct capref* retcap = (struct capref*) args[2];
+    // 4. Get requested size.
+    size_t* size = (size_t*) args[3];
 
-    errval_t err = frame_alloc(rpc->rcs.retcap, rpc->rcs.req_bytes,
-            rpc->rcs.ret_bytes);
+    // 5. Allocate frame.
+    size_t retsize;
+    errval_t err = frame_alloc(retcap, *size, &retsize);
+    // 6. Generate response code.
     size_t code = err_is_fail(err) ? AOS_RPC_FAILED : AOS_RPC_OK;
+
+    // 7. Send response.
     CHECK("lmp_chan_send memory",
-            lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, *rpc->rcs.retcap,
-                code, (uintptr_t) err, *rpc->rcs.ret_bytes));
+            lmp_chan_send3(lc, LMP_FLAG_SYNC, *retcap, code, (uintptr_t) err,
+                    *retsize));
+
     return SYS_ERR_OK;
 }
 
@@ -141,22 +206,16 @@ int main(int argc, char *argv[])
 
     CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
 
-    struct aos_rpc* rpc = (struct aos_rpc*) malloc(sizeof(struct aos_rpc));
-    rpc->ws = get_default_waitset();
-    // TODO: Find a nicer way...
-    struct capref dummy_cap;
-    size_t dummy_size;
-    rpc->rcs.retcap = &dummy_cap;
-    rpc->rcs.ret_bytes = &dummy_size;
+    struct lmp_chan** lc = (struct lmp_chan**) malloc(sizeof(struct lmp_chan*));
+    lc[0] = (struct lmp_chan) malloc(sizeof(struct lmp_chan));
+    CHECK("Create channel for parent", lmp_chan_accept(lc[0], DEFAULT_LMP_BUF_WORDS, NULL_CAP));
 
-    CHECK("Create channel for parent", lmp_chan_accept(&rpc->lc, DEFAULT_LMP_BUF_WORDS, NULL_CAP));
-
-    CHECK("Create Slot", lmp_chan_alloc_recv_slot(&rpc->lc));
-    CHECK("COpy to initep", cap_copy(cap_initep, rpc->lc.local_cap));
+    CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc[0]));
+    CHECK("COpy to initep", cap_copy(cap_initep, lc.local_cap));
 
     CHECK("lmp_chan_register_recv child",
-            lmp_chan_register_recv(&rpc->lc, rpc->ws,
-                    MKCLOSURE((void*) recv_handler, rpc)));
+            lmp_chan_register_recv(lc[0], get_default_waitset(),
+                    MKCLOSURE((void*) recv_handler, lc)));
 
     // // ALLOCATE A LOT OF MEMORY TROLOLOLOLO.
     // struct capref frame;

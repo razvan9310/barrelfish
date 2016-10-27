@@ -169,20 +169,21 @@ errval_t aos_rpc_handshake_recv(void* arg)
 /**
  * \brief General-purpose blocking RPC send-and-receive function.
  */
-errval_t aos_rpc_send_and_receive(struct aos_rpc* rpc, void* send_handler,
+errval_t aos_rpc_send_and_receive(void** args, void* send_handler,
         void* rcv_handler)
 {
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
     // 1. Set send handler.
     debug_printf("aos_rpc.c: send_and_receive register_send\n");
     CHECK("aos_rpc.c#aos_rpc_send_and_receive: lmp_chan_register_send",
             lmp_chan_register_send(&rpc->lc, rpc->ws,
-                    MKCLOSURE(send_handler, rpc)));
+                    MKCLOSURE(send_handler, args)));
 
     // 2. Set receive handler.
     debug_printf("aos_rpc.c: send_and_receive register_recv\n");
     CHECK("aos_rpc.c#aos_rpc_send_and_receive: lmp_chan_register_recv",
             lmp_chan_register_recv(&rpc->lc, rpc->ws,
-                    MKCLOSURE(rcv_handler, rpc)));
+                    MKCLOSURE(rcv_handler, args)));
 
     // 3. Block until channel is ready to send.
     debug_printf("aos_rpc.c: send_and_receive dispatch send\n");

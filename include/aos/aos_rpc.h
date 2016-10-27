@@ -28,15 +28,6 @@
 struct aos_rpc {
     struct lmp_chan lc;
     struct waitset* ws;
-
-    // Metadata about caps during get_ram_cap requests. aos_rpc_get_ram_cap is
-    // blocking, hence there can not be more than one request in the system from
-    // any one cient at any given time (thus no races).
-    struct ram_cap_state {
-    	struct capref* retcap;
-    	size_t req_bytes;
-    	size_t* ret_bytes;
-    } rcs;
 };
 
 /**
