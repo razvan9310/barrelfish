@@ -17,8 +17,12 @@
 
 #include <aos/aos.h>
 
-#define AOS_RPC_MSG_LENGTH_HANDSHAKE 1  // Message length for initial handshake.
+#define AOS_RPC_FAILED 0  // RPC failure.
 #define AOS_RPC_HANDSHAKE 1  // Message passed at handshake time.
+#define AOS_RPC_MEMORY 1 << 2  // ID for memory requests.
+#define AOS_RPC_NUMBER 1 << 3  // ID for send number requests.
+#define AOS_RPC_PUTCHAR 1 << 5  // ID for putchar requests.
+#define AOS_RPC_STRING 1 << 7  // ID for send string requests.
 
 struct aos_rpc {
     struct lmp_chan lc;

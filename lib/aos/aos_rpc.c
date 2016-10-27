@@ -101,7 +101,7 @@ errval_t aos_rpc_handshake_recv(void* arg)
     }
 
     // This should be an ACK only.
-    assert(msg.buf.msglen == AOS_RPC_MSG_LENGTH_HANDSHAKE);
+    assert(msg.buf.msglen == 1);
     assert(msg.words[0] == AOS_RPC_HANDSHAKE);
 
     // Reregister.
