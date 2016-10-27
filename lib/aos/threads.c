@@ -1124,7 +1124,7 @@ static int bootstrap_thread(struct spawn_domain_params *params)
     }
     slab_init(&thread_slabs, blocksize, refill_thread_slabs);
 
-    if (init_domain_global) {
+    if (init_domain_global || true) {
         // run main() on this thread, since we can't allocate
         if (tls_block_total_len > 0) {
             USER_PANIC("unsupported: use of TLS data in bootstrap domain\n");

@@ -109,7 +109,6 @@ void barrelfish_libc_glue_init(void)
 errval_t send_handler(void *arg)
 {
     struct lmp_chan* lc =(struct lmp_chan*) arg;
-    printf("Going into send handler\n");
     CHECK("lmp_chan_send child",
             lmp_chan_send1(lc, LMP_FLAG_SYNC, lc->local_cap, 42));
     return SYS_ERR_OK;
@@ -117,7 +116,6 @@ errval_t send_handler(void *arg)
 
 errval_t receive_handler(void *arg)
 {
-    printf("Going into child receive\n");
     struct lmp_chan* lc =(struct lmp_chan*) arg;
     struct lmp_recv_msg msg;
     // printf("msg buflen %d\n", msg.buf.buflen);
@@ -128,8 +126,8 @@ errval_t receive_handler(void *arg)
         lmp_chan_register_recv(lc, get_default_waitset(),
                 MKCLOSURE((void *)receive_handler, arg));
     }
-    debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
-    debug_printf("init.c: msg->words[0] = %d", msg.words[0]);
+    debug_printf("hello.c: msg buflen %zu\n", msg.buf.msglen);
+    debug_printf("hello.c: msg->words[0] = %d\n", msg.words[0]);
     lmp_chan_register_recv(lc, get_default_waitset(),
             MKCLOSURE((void *)receive_handler, arg));
 
@@ -210,14 +208,12 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
         DEBUG_ERR(err, "in event_dispatch");
         abort();
     }
-    debug_printf("init.c: child process received event with err %d\n", err);
 
     err = event_dispatch(default_ws);
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "in event_dispatch");
         abort();
     }
-    debug_printf("init.c: child process received event with err %d\n", err);
 
     // /* wait for init to acknowledge receiving the endpoint */
     // err = 1;
