@@ -52,8 +52,6 @@ errval_t aos_rpc_number_recv_handler(void **args)
     return err;
 }
 
-
-
 errval_t aos_rpc_send_number(struct aos_rpc *chan, uintptr_t val)
 {
     // TODO: implement functionality to send a number ofer the channel
@@ -76,10 +74,18 @@ errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string)
  */
 errval_t aos_rpc_ram_send(void** args)
 {
+    // 1. aos_rpc
     struct aos_rpc *rpc = (struct aos_rpc*) args[0];
+    // 2. request_bytes
+    size_t* req_bytes = (size_t*) args[1];
+    // 3. retcap
+    struct capref* retcap = (struct capref*) args[2];
+    // 4. ret_bytes is not used here.
+
+    // 5. Perform send.
     CHECK("aos_rpc.c#aos_rpc_ram_send: lmp_chan_send0",
-            lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, *rpc->rcs.retcap,
-                    AOS_RPC_MEMORY, rpc->rcs.req_bytes));
+            lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, *retcap,
+                    AOS_RPC_MEMORY, rpc->client_id, req_bytes));
     return SYS_ERR_OK;
 }
 
@@ -88,40 +94,58 @@ errval_t aos_rpc_ram_send(void** args)
  */
 errval_t aos_rpc_ram_recv(void** args)
 {
+    // 1. aos_rpc
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    // 2. retcap
+    struct capref* retcap = (struct aos_rpc*) args[2];
+
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
 
-    errval_t err = lmp_chan_recv(&rpc->lc, &msg, rpc->rcs.retcap);
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, retcap);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         // Reregister.
         lmp_chan_register_recv(&rpc->lc, rpc->ws,
-                MKCLOSURE((void*) aos_rpc_ram_recv, args[0]));
+                MKCLOSURE((void*) aos_rpc_ram_recv, args));
     }
 
     // We should have received:
     // 1) RPC code
     // 2) RAM alloc error code
     // 3) actual returned size, if alloc succeeded.
-    assert(msg.buf.msglen >= 2);
-
-    // Will return error provided by server.
-    err = (errval_t) msg.words[1];
+    assert(msg.buf.msglen >= 3);
+   
     if (msg.words[0] == AOS_RPC_OK) {
-        // Fill in true return size.
-        *rpc->rcs.ret_bytes = msg.words[2];
+        // Fill in returnd size.
+        size_t* retsize = (size_t*) args[3];
+        *retsize = msg.words[2];
     }
 
     // No need to reregister, we got our RAM.
-    return err;
+    // Will return error provided by server.
+    return (errval_t) msg.words[1];
 }
 
 errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t request_bytes,
                              struct capref *retcap, size_t *ret_bytes)
 {
-    // Fill in requested cap metadata.
-    chan->rcs.retcap = retcap;
-    chan->rcs.req_bytes = request_bytes;
-    chan->rcs.ret_bytes = ret_bytes;
+    // Fill in args.
+    // 1. aos_rpc
+    // 2. request_bytes
+    // 3. retcap
+    // 4. ret_bytes
+    void** args = (void**) malloc(4 * sizeof(void*));
+    
+    args[0] = (aos_rpc*) malloc(sizeof(aos_rpc));
+    *args[0] = *chan;
+
+    args[1] = (size_t*) malloc(sizeof(size_t));
+    *args[1] = request_bytes;
+
+    args[2] = (struct capref*) malloc(sizeof(struct capref));
+    *args[2] = *retcap;
+
+    // Nothing to fill args[3] with, will get filled in with RPC response.
+    args[3] = (size_t*) malloc(sizeof(size_t));
 
     // Allocate recv slot.
     CHECK("aos_rpc.c#aos_rpc_get_ram_cap: lmp_chan_alloc_recv_slot",
@@ -130,8 +154,19 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t request_bytes,
     // Perform RPC. On success, this will make the provided capref pointer point
     // to the newly allocated memory region.
     CHECK("aos_rpc.c#aos_rpc_get_ram_cap: aos_rpc_send_and_receive",
-            aos_rpc_send_and_receive(chan, aos_rpc_ram_send,
+            aos_rpc_send_and_receive(args, aos_rpc_ram_send,
                     aos_rpc_ram_recv));
+
+    // Update requested values following RPC.
+    *retcap = *args[2];
+    *ret_bytes = *args[3];
+
+    // Free args.
+    free(args[3]);
+    free(args[2]);
+    free(args[1]);
+    free(args[0]);
+    free(args);
 
     return SYS_ERR_OK;
 }
@@ -239,9 +274,10 @@ errval_t aos_rpc_handshake_recv(void** args)
                 MKCLOSURE((void*) aos_rpc_handshake_recv, args));
     }
 
-    // This should be an ACK only.
-    assert(msg.buf.msglen == 1);
+    // We should have an ACK with a client ID.
+    assert(msg.buf.msglen == 2);
     assert(msg.words[0] == AOS_RPC_OK);
+    rpc->client_id = (uint32_t) msg.words[1];
 
     // No need to rereister here, as handshake is complete;
     return err;

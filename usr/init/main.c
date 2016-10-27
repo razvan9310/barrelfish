@@ -88,21 +88,17 @@ errval_t recv_handler(void** arg)
                 uint32_t conn = msg.words[1];
                 // Response args.
                 // 1. Channel to send down.
-                // 2. Client ID.
-                // 3. Cap to fill with memory.
-                // 4. Requested size.
+                // 2. Cap to fill with memory.
+                // 3. Requested size.
                 response_args = (void**) malloc(4 * sizeof(void*));
                 response_args[0] = (struct lmp_chan*) malloc(sizeof(struct lmp_chan));
                 *response_args[0] = clients[conn];
 
-                response_args[1] = (uint32_t*) malloc(sizeof(uint32_t));
-                *response_args[1] = conn;
+                response_args[1] = (struct capref*) malloc(sizeof(struct capref));
+                *response_args[1] = cap;
 
-                response_args[2] = (struct capref*) malloc(sizeof(struct capref));
-                *response_args[2] = cap;
-
-                response_args[3] = (size_t*) malloc(sizeof(size_t));
-                *response_args[3] = msg.words[2];
+                response_args[2] = (size_t*) malloc(sizeof(size_t));
+                *response_args[2] = msg.words[2];
 
                 break;
             default:
@@ -145,23 +141,27 @@ errval_t parent_send_memory(void* arg)
 {
     // 1. Get channel to send down.
     struct lmp_chan* lc = (struct lmp_chan*) args[0];
-    // 2. Get Client ID.
-    uint32_t* client_id = (uint32_t*) args[1];
-    // 3. Get cap to fill.
-    struct capref* retcap = (struct capref*) args[2];
-    // 4. Get requested size.
-    size_t* size = (size_t*) args[3];
+    // 2. Get cap to fill.
+    struct capref* retcap = (struct capref*) args[1];
+    // 3. Get requested size.
+    size_t* size = (size_t*) args[2];
 
-    // 5. Allocate frame.
-    size_t retsize;
+    // 4. Allocate frame.
+    size_t retsize = 0;
     errval_t err = frame_alloc(retcap, *size, &retsize);
-    // 6. Generate response code.
+    // 5. Generate response code.
     size_t code = err_is_fail(err) ? AOS_RPC_FAILED : AOS_RPC_OK;
 
-    // 7. Send response.
+    // 6. Send response.
     CHECK("lmp_chan_send memory",
             lmp_chan_send3(lc, LMP_FLAG_SYNC, *retcap, code, (uintptr_t) err,
                     *retsize));
+
+    // 7 Free args.
+    free(size);
+    free(retcap);
+    free(lc);
+    free(args);
 
     return SYS_ERR_OK;
 }
