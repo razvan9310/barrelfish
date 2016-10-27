@@ -35,6 +35,8 @@ errval_t aos_rpc_putchar_send_handler(void* void_args);
 errval_t aos_rpc_putchar_recv_handler(void* void_args);
 errval_t aos_rpc_send_number_send_handler(void* void_args);
 errval_t aos_rpc_send_number_recv_handler(void* void_args);
+errval_t aos_rpc_send_string_send_handler(void* void_args);
+errval_t aos_rpc_send_string_recv_handler(void* void_args);
 
 /**
  * \brief send a number over the given channel
