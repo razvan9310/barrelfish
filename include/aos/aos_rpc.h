@@ -17,7 +17,7 @@
 
 #include <aos/aos.h>
 
-#define AOS_RPC_OK 1              // General-purpose OK message.
+#define AOS_RPC_OK 0              // General-purpose OK message.
 #define AOS_RPC_FAILED 1          // RPC failure.
 #define AOS_RPC_HANDSHAKE 1 << 2  // Message passed at handshake time.
 #define AOS_RPC_MEMORY 1 << 3  	  // ID for memory requests.
