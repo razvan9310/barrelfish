@@ -36,7 +36,7 @@ errval_t parent_send_memory(void* arg);
 errval_t recv_handler(void *arg)
 {
     struct aos_rpc* rpc = (struct aos_rpc*) arg;
-    struct lmp_recv_msg msg;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
     // printf("msg buflen %d\n", msg.buf.buflen);
     struct capref cap;
     errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
