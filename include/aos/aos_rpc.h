@@ -28,6 +28,15 @@
 struct aos_rpc {
     struct lmp_chan lc;
     struct waitset* ws;
+
+    // Metadata about caps during get_ram_cap requests. aos_rpc_get_ram_cap is
+    // blocking, hence there can not be more than one request in the system from
+    // any one cient at any given time (thus no races).
+    struct ram_cap_state {
+    	struct capref* retcap;
+    	size_t req_bytes;
+    	size_t* ret_bytes;
+    } rcs;
 };
 
 /**
@@ -39,6 +48,16 @@ errval_t aos_rpc_send_number(struct aos_rpc *chan, uintptr_t val);
  * \brief send a string over the given channel
  */
 errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string);
+
+/**
+ * \brief RAM cap request.
+ */
+errval_t aos_rpc_ram_send(void* arg);
+
+/**
+ * \brief RAM cap response.
+ */
+errval_t aos_rpc_ram_recv(void* arg);
 
 /**
  * \brief request a RAM capability with >= request_bits of size over the given
@@ -95,6 +114,12 @@ errval_t aos_rpc_handshake_send(void* arg);
  * \brief Finalize handshake by receiving ack from server.
  */
 errval_t aos_rpc_handshake_recv(void* arg);
+
+/**
+ * \brief General-purpose blocking RPC send-and-receive function.
+ */
+errval_t aos_rpc_send_and_receive(struct aos_rpc* rpc, void* send_handler,
+		void* rcv_handler);
 
 /**
  * \brief Initialize given rpc channel.

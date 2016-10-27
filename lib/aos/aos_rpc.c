@@ -28,11 +28,66 @@ errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string)
     return SYS_ERR_OK;
 }
 
-errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t request_bits,
-                             struct capref *retcap, size_t *ret_bits)
+/**
+ * \brief RAM cap request.
+ */
+errval_t aos_rpc_ram_send(void* arg)
 {
-    // TODO: implement functionality to request a RAM capability over the
-    // given channel and wait until it is delivered.
+    struct aos_rpc *rpc = (struct aos_rpc*) arg;
+    CHECK("aos_rpc.c#aos_rpc_ram_send: lmp_chan_send0",
+            lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, *rpc->rcs.retcap,
+                    AOS_RPC_MEMORY, rpc->rcs.req_bytes));
+    return SYS_ERR_OK;
+}
+
+/**
+ * \brief RAM cap response.
+ */
+errval_t aos_rpc_ram_recv(void* arg)
+{
+    struct aos_rpc* rpc = (struct aos_rpc*) arg;
+    struct lmp_recv_msg msg;
+
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, rpc->rcs.retcap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister.
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_ram_recv, arg));
+    }
+
+    // We should have received:
+    // 1) RPC code
+    // 2) RAM alloc error code
+    // 3) actual returned size, if alloc succeeded.
+    assert(msg.buf.msglen >= 2);
+
+    // Will return error provided by server.
+    err = (errval_t) msg.words[1];
+    if (msg.words[0] == AOS_RPC_OK) {
+        // Fill in true return size.
+        *rpc->rcs.ret_bytes = msg.words[2];
+    }
+
+    // Reregister.
+    lmp_chan_register_recv(&rpc->lc, rpc->ws,
+            MKCLOSURE((void*) aos_rpc_ram_recv, arg));
+    return err;
+}
+
+errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t request_bytes,
+                             struct capref *retcap, size_t *ret_bytes)
+{
+    // Fill in requested cap metadata.
+    chan->rcs.retcap = retcap;
+    chan->rcs.req_bytes = request_bytes;
+    chan->rcs.ret_bytes = ret_bytes;
+
+    // Perform RPC. On success, this will make the provided capref pointer point
+    // to the newly allocated memory region.
+    CHECK("aos_rpc.c#aos_rpc_get_ram_cap: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(chan, aos_rpc_ram_send,
+                    aos_rpc_ram_recv));
+
     return SYS_ERR_OK;
 }
 
@@ -110,6 +165,33 @@ errval_t aos_rpc_handshake_recv(void* arg)
     return err;
 }
 
+/**
+ * \brief General-purpose blocking RPC send-and-receive function.
+ */
+errval_t aos_rpc_send_and_receive(struct aos_rpc* rpc, void* send_handler,
+        void* rcv_handler)
+{
+    // 1. Set send handler.
+    CHECK("aos_rpc.c#aos_rpc_send_and_receive: lmp_chan_register_send",
+            lmp_chan_register_send(&rpc->lc, rpc->ws,
+                    MKCLOSURE(send_handler, rpc)));
+
+    // 2. Set receive handler.
+    CHECK("aos_rpc.c#aos_rpc_send_and_receive: lmp_chan_register_recv",
+            lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                    MKCLOSURE(rcv_handler, rpc)));
+
+    // 3. Block until channel is ready to send.
+    CHECK("aos_rpc.c#aos_rpc_send_and_receive: event_dispatch send",
+            event_dispatch(rpc->ws));
+
+    // 4. Block until channel is ready to receive.
+    CHECK("aos_rpc.c#aos_rpc_send_and_receive: event_dispatch receive",
+            event_dispatch(rpc->ws));
+
+    return SYS_ERR_OK;
+}
+
 errval_t aos_rpc_init(struct aos_rpc *rpc, struct waitset* ws)
 {
     // 0. Assign waitset to use from now on.
@@ -119,23 +201,10 @@ errval_t aos_rpc_init(struct aos_rpc *rpc, struct waitset* ws)
     CHECK("aos_rpc.c#aos_rpc_init: lmp_chan_accept",
             lmp_chan_accept(&rpc->lc, DEFAULT_LMP_BUF_WORDS, cap_initep));
 
-    // 2. Set hanshake send handler to notify init of our cap.
-    CHECK("aos_rpc.c#aos_rpc_init: lmp_chan_register_send",
-            lmp_chan_register_send(&rpc->lc, rpc->ws,
-                    MKCLOSURE((void *) aos_rpc_handshake_send, rpc)));
-
-    // 3. Set handshake receive handler to wait for ACK from init.
-    CHECK("aos_rpc.c#aos_rpc_init: lmp_chan_register_recv",
-            lmp_chan_register_recv(&rpc->lc, rpc->ws,
-                    MKCLOSURE((void *) aos_rpc_handshake_recv, rpc)));
-
-    // 4. Block until the channel is ready to send handshake request to init.
-    CHECK("aos_rpc.c#aos_rpc_init: event_dispatch send",
-            event_dispatch(rpc->ws));
-
-    // 5. Block until there's an ACK from init.
-    CHECK("aos_rpc.c#aos_rpc_init: event_dispatch receive",
-            event_dispatch(rpc->ws));
+    // 2. Send handshake request to init and wait for ACK.
+    CHECK("aos_rpc.c#aos_rpc_init: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(rpc, aos_rpc_handshake_send,
+                    aos_rpc_handshake_recv));
 
     // By now we've successfully established the underlying LMP channel for RPC.
     return SYS_ERR_OK;
