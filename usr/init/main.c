@@ -62,7 +62,7 @@ errval_t parent_send_handler(void *arg)
 {
     struct lmp_chan* lc =(struct lmp_chan*) arg;
     CHECK("lmp_chan_send parent",
-            lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_HANDSHAKE));
+            lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
     return SYS_ERR_OK;
 }
 

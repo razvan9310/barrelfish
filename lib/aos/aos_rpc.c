@@ -102,7 +102,7 @@ errval_t aos_rpc_handshake_recv(void* arg)
 
     // This should be an ACK only.
     assert(msg.buf.msglen == 1);
-    assert(msg.words[0] == AOS_RPC_HANDSHAKE);
+    assert(msg.words[0] == AOS_RPC_OK);
 
     // Reregister.
     lmp_chan_register_recv(&rpc->lc, rpc->ws,
