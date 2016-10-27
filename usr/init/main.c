@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include <aos/aos.h>
+#include <aos/aos_rpc.h>
 #include <aos/waitset.h>
 #include <aos/morecore.h>
 #include <aos/paging.h>
@@ -61,7 +62,7 @@ errval_t parent_send_handler(void *arg)
 {
     struct lmp_chan* lc =(struct lmp_chan*) arg;
     CHECK("lmp_chan_send parent",
-            lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, 43));
+            lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_HANDSHAKE));
     return SYS_ERR_OK;
 }
 

@@ -73,9 +73,70 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
     return SYS_ERR_OK;
 }
 
-
-errval_t aos_rpc_init(struct aos_rpc *rpc)
+/**
+ * \brief Initiate handshake by sending local cap to server.
+ */
+errval_t aos_rpc_handshake_send(void* arg)
 {
-    // TODO: Initialize given rpc channel
+    struct aos_rpc *rpc = (struct aos_rpc*) arg;
+    CHECK("aos_rpc.c#aos_rpc_handshake_send: lmp_chan_send0",
+            lmp_chan_send0(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap));
+    return SYS_ERR_OK;
+}
+
+/**
+ * \brief Finalize handshake by receiving ack from server.
+ */
+errval_t aos_rpc_handshake_recv(void* arg)
+{
+    struct aos_rpc* rpc = (struct aos_rpc*) arg;
+    struct lmp_recv_msg msg;
+    struct capref cap;
+
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister.
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_handshake_recv, arg));
+    }
+
+    // This should be an ACK only.
+    assert(msg.buf.msglen == AOS_RPC_MSG_LENGTH_HANDSHAKE);
+    assert(msg.words[0] == AOS_RPC_HANDSHAKE);
+
+    // Reregister.
+    lmp_chan_register_recv(&rpc->lc, rpc->ws,
+            MKCLOSURE((void*) aos_rpc_handshake_recv, arg));
+    return err;
+}
+
+errval_t aos_rpc_init(struct aos_rpc *rpc, struct waitset* ws)
+{
+    // 0. Assign waitset to use from now on.
+    rpc->ws = ws;
+
+    // 1. Create local channel using init as remote endpoint.
+    CHECK("aos_rpc.c#aos_rpc_init: lmp_chan_accept",
+            lmp_chan_accept(&rpc->lc, DEFAULT_LMP_BUF_WORDS, cap_initep));
+
+    // 2. Set hanshake send handler to notify init of our cap.
+    CHECK("aos_rpc.c#aos_rpc_init: lmp_chan_register_send",
+            lmp_chan_register_send(&rpc->lc, rpc->ws,
+                    MKCLOSURE((void *) aos_rpc_handshake_send, rpc)));
+
+    // 3. Set handshake receive handler to wait for ACK from init.
+    CHECK("aos_rpc.c#aos_rpc_init: lmp_chan_register_recv",
+            lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                    MKCLOSURE((void *) aos_rpc_handshake_recv, rpc)));
+
+    // 4. Block until the channel is ready to send handshake request to init.
+    CHECK("aos_rpc.c#aos_rpc_init: event_dispatch send",
+            event_dispatch(rpc->ws));
+
+    // 5. Block until there's an ACK from init.
+    CHECK("aos_rpc.c#aos_rpc_init: event_dispatch receive",
+            event_dispatch(rpc->ws));
+
+    // By now we've successfully established the underlying LMP channel for RPC.
     return SYS_ERR_OK;
 }

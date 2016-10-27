@@ -17,8 +17,12 @@
 
 #include <aos/aos.h>
 
+#define AOS_RPC_MSG_LENGTH_HANDSHAKE 1  // Message length for initial handshake.
+#define AOS_RPC_HANDSHAKE 1  // Message passed at handshake time.
+
 struct aos_rpc {
-    // TODO: add state for your implementation
+    struct lmp_chan lc;
+    struct waitset* ws;
 };
 
 /**
@@ -78,10 +82,20 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
                                       domainid_t **pids, size_t *pid_count);
 
 /**
+ * \brief Initiate handshake by sending local cap to server.
+ */
+errval_t aos_rpc_handshake_send(void* arg);
+
+/**
+ * \brief Finalize handshake by receiving ack from server.
+ */
+errval_t aos_rpc_handshake_recv(void* arg);
+
+/**
  * \brief Initialize given rpc channel.
  * TODO: you may want to change the inteface of your init function, depending
  * on how you design your message passing code.
  */
-errval_t aos_rpc_init(struct aos_rpc *rpc);
+errval_t aos_rpc_init(struct aos_rpc *rpc, struct waitset* ws);
 
 #endif // _LIB_BARRELFISH_AOS_MESSAGES_H

@@ -16,6 +16,7 @@
 
 #include <stdio.h>
 #include <aos/aos.h>
+#include <aos/aos_rpc.h>
 #include <aos/dispatch.h>
 #include <aos/curdispatcher_arch.h>
 #include <aos/dispatcher_arch.h>
@@ -106,34 +107,6 @@ void barrelfish_libc_glue_init(void)
     setvbuf(stderr, ebuf, _IOLBF, sizeof(buf));
 }
 
-errval_t send_handler(void *arg)
-{
-    struct lmp_chan* lc =(struct lmp_chan*) arg;
-    CHECK("lmp_chan_send child",
-            lmp_chan_send1(lc, LMP_FLAG_SYNC, lc->local_cap, 42));
-    return SYS_ERR_OK;
-}
-
-errval_t receive_handler(void *arg)
-{
-    struct lmp_chan* lc =(struct lmp_chan*) arg;
-    struct lmp_recv_msg msg;
-    // printf("msg buflen %d\n", msg.buf.buflen);
-    struct capref cap;
-    errval_t err = lmp_chan_recv(lc, &msg, &cap);
-    if (err_is_fail(err) && lmp_err_is_transient(err)) {
-        // reregister
-        lmp_chan_register_recv(lc, get_default_waitset(),
-                MKCLOSURE((void *)receive_handler, arg));
-    }
-    debug_printf("hello.c: msg buflen %zu\n", msg.buf.msglen);
-    debug_printf("hello.c: msg->words[0] = %d\n", msg.words[0]);
-    lmp_chan_register_recv(lc, get_default_waitset(),
-            MKCLOSURE((void *)receive_handler, arg));
-
-    return err;
-}
-
 /** \brief Initialise libbarrelfish.
  *
  * This runs on a thread in every domain, after the dispatcher is setup but
@@ -183,50 +156,13 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
         return SYS_ERR_OK;
     }
 
-    // TODO MILESTONE 3: register ourselves with init
-    /* allocate lmp channel structure */
-    /* create local endpoint */
-    /* set remote endpoint to init's endpoint */
-    struct lmp_chan lc;
-    CHECK("lmp_chan_accept child",
-            lmp_chan_accept(&lc, DEFAULT_LMP_BUF_WORDS, cap_initep));
+    // Initialize RPC channel.
+    struct aos_rpc* rpc = (struct aos_rpc*) malloc(sizeof(struct aos_rpc));
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_init",
+            aos_rpc_init(rpc, get_default_waitset()));
+    // Set domain init rpc.
+    set_init_rpc(rpc);
 
-    // /* set send handler */
-    CHECK("lmp_chan_register_send child",
-            lmp_chan_register_send(&lc,
-                    get_default_waitset(),
-                    MKCLOSURE((void *)send_handler, &lc)));
-
-    CHECK("lmp_chan_register_recv child",
-            lmp_chan_register_recv(&lc,
-                    get_default_waitset(),
-                    MKCLOSURE((void *)receive_handler, &lc)));
-
-    // printf("!!! BEFORE WHILE\n");
-    err = event_dispatch(default_ws);
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "in event_dispatch");
-        abort();
-    }
-
-    err = event_dispatch(default_ws);
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "in event_dispatch");
-        abort();
-    }
-
-    // /* wait for init to acknowledge receiving the endpoint */
-    // err = 1;
-    // do {
-    //     wait_for_channel(get_default_waitset(), &lc.endpoint->waitset_state,
-    //             &err);
-    // } while (err != SYS_ERR_OK);
-
-    /* initialize init RPC client with lmp channel */
-    /* set init RPC client in our program state */
-
-    /* TODO MILESTONE 3: now we should have a channel with init set up and can
-     * use it for the ram allocator */
 
     // right now we don't have the nameservice & don't need the terminal
     // and domain spanning, so we return here
