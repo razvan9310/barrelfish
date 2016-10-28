@@ -138,7 +138,7 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // Initialize ram_alloc state
     ram_alloc_init();
     /* All domains use smallcn to initialize */
-    err = ram_alloc_set(/*init_domain ? */ram_alloc_fixed/* : NULL*/);
+    err = ram_alloc_set(init_domain ? ram_alloc_fixed : NULL);
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_RAM_ALLOC_SET);
     }
@@ -173,109 +173,109 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // Set domain init rpc.
     set_init_rpc(rpc);
 
-    struct capref frame;
-    size_t retsize;
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
-            aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
-    debug_printf("init.c: Client asked for %u memory, was given %u\n",
-        16 * 1024 * 1024, retsize);
+    // struct capref frame;
+    // size_t retsize;
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
+    //         aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
+    // debug_printf("init.c: Client asked for %u memory, was given %u\n",
+    //     16 * 1024 * 1024, retsize);
 
-    void* buf;
-    err = paging_map_frame_attr(get_current_paging_state(),
-        &buf, retsize, frame,
-        VREGION_FLAGS_READ_WRITE, NULL, NULL);
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "PANIC MAPPING 16 MB FRAME IN CHILD");
-    }
+    // void* buf;
+    // err = paging_map_frame_attr(get_current_paging_state(),
+    //     &buf, retsize, frame,
+    //     VREGION_FLAGS_READ_WRITE, NULL, NULL);
+    // if (err_is_fail(err)) {
+    //     DEBUG_ERR(err, "PANIC MAPPING 16 MB FRAME IN CHILD");
+    // }
 
-    debug_printf("init.c: testing memory @ %p\n", buf);
-    char* cbuf = (char*)buf;
-    *cbuf = 'J';
-    sys_debug_flush_cache();
-    debug_printf("%c\n", *cbuf);
+    // debug_printf("init.c: testing memory @ %p\n", buf);
+    // char* cbuf = (char*)buf;
+    // *cbuf = 'J';
+    // sys_debug_flush_cache();
+    // debug_printf("%c\n", *cbuf);
 
-    cbuf += 4 * 1024 * 1024;
-    *cbuf = 'K';
-    sys_debug_flush_cache();
-    debug_printf("%c\n", *cbuf);
+    // cbuf += 4 * 1024 * 1024;
+    // *cbuf = 'K';
+    // sys_debug_flush_cache();
+    // debug_printf("%c\n", *cbuf);
 
-    cbuf += 4 * 1024 * 1024;
-    *cbuf = 'L';
-    sys_debug_flush_cache();
-    debug_printf("%c\n", *cbuf);
+    // cbuf += 4 * 1024 * 1024;
+    // *cbuf = 'L';
+    // sys_debug_flush_cache();
+    // debug_printf("%c\n", *cbuf);
 
-    cbuf += 4 * 1024 * 1024;
-    *cbuf = 'M';
-    sys_debug_flush_cache();
-    debug_printf("%c\n", *cbuf);
+    // cbuf += 4 * 1024 * 1024;
+    // *cbuf = 'M';
+    // sys_debug_flush_cache();
+    // debug_printf("%c\n", *cbuf);
 
-    // Ask for more memory -- attempt to break 64 MB limitation.
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
-            aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
-    debug_printf("init.c: Client asked for %u memory, was given %u\n",
-        16 * 1024 * 1024, retsize);
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
-            aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
-    debug_printf("init.c: Client asked for %u memory, was given %u\n",
-        16 * 1024 * 1024, retsize);
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
-            aos_rpc_get_ram_cap(rpc, 24 * 1024 * 1024, &frame, &retsize));
-    debug_printf("init.c: Client asked for %u memory, was given %u\n",
-        24 * 1024 * 1024, retsize);
+    // // Ask for more memory -- attempt to break 64 MB limitation.
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
+    //         aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
+    // debug_printf("init.c: Client asked for %u memory, was given %u\n",
+    //     16 * 1024 * 1024, retsize);
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
+    //         aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
+    // debug_printf("init.c: Client asked for %u memory, was given %u\n",
+    //     16 * 1024 * 1024, retsize);
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
+    //         aos_rpc_get_ram_cap(rpc, 24 * 1024 * 1024, &frame, &retsize));
+    // debug_printf("init.c: Client asked for %u memory, was given %u\n",
+    //     24 * 1024 * 1024, retsize);
 
-    // RPC send number.
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_send_number",
-            aos_rpc_send_number(rpc, 1337));
+    // // RPC send number.
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_send_number",
+    //         aos_rpc_send_number(rpc, 1337));
 
-    // RPC putchar.
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'T'));
+    // // RPC putchar.
     // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'H'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'I'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'S'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, ' '));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'I'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'S'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, ' '));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'A'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, ' '));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'F'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, '*'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, '*'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, '*'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'I'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'N'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'G'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, ' '));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'R'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'P'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, 'C'));
-    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-    //         aos_rpc_serial_putchar(rpc, '\n'));
+    //         aos_rpc_serial_putchar(rpc, 'T'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'H'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'I'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'S'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, ' '));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'I'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'S'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, ' '));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'A'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, ' '));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'F'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, '*'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, '*'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, '*'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'I'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'N'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'G'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, ' '));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'R'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'P'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, 'C'));
+    // // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    // //         aos_rpc_serial_putchar(rpc, '\n'));
 
-    // Stringz.
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_send_string",
-            aos_rpc_send_string(rpc, "this is such a long it makes me sad\n"));
+    // // Stringz.
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_send_string",
+    //         aos_rpc_send_string(rpc, "this is such a long it makes me sad\n"));
 
     // right now we don't have the nameservice & don't need the terminal
     // and domain spanning, so we return here

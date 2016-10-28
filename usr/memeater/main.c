@@ -145,10 +145,11 @@ int main(int argc, char *argv[])
 
     debug_printf("memeater started....\n");
 
-    err = aos_rpc_init(&init_rpc, get_default_waitset());
-    if (err_is_fail(err)) {
-        USER_PANIC_ERR(err, "could not initialize RPC\n");
-    }
+    // err = aos_rpc_init(&init_rpc, get_default_waitset());
+    // if (err_is_fail(err)) {
+    //     USER_PANIC_ERR(err, "could not initialize RPC\n");
+    // }
+    init_rpc = *get_init_rpc();
 
     err = test_basic_rpc();
     if (err_is_fail(err)) {

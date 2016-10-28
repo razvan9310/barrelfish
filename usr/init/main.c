@@ -107,11 +107,11 @@ uintptr_t* process_memory_request(struct lmp_recv_msg* msg,
         // Limit to 64 MB.
         req_size = MAX_CLIENT_RAM - clients[conn].ram;
     }
-    size_t ret_size;
 
     // Allocate frame.
-    errval_t err = frame_alloc(remote_cap, req_size, &ret_size);
-    clients[conn].ram += ret_size;
+
+    errval_t err = ram_alloc(remote_cap, req_size);//frame_alloc(remote_cap, req_size, &ret_size);
+    clients[conn].ram += req_size;
 
     // Response args.
     // 1. Channel to send down.
@@ -129,7 +129,7 @@ uintptr_t* process_memory_request(struct lmp_recv_msg* msg,
     *((struct capref*) args[2]) = *remote_cap;
 
     args[3] = (uintptr_t) ((size_t*) malloc(sizeof(size_t)));
-    *((size_t*) args[3]) = ret_size;
+    *((size_t*) args[3]) = req_size;
 
     return args;
 }
@@ -422,10 +422,11 @@ int main(int argc, char *argv[])
     // *(a+1) = 'b';
     // printf("Value of char after resize %c\n", *(a+1));
     // spawn a few helloz
-    spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    // spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     // spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     //spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     //spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    spawn_load_by_name("memeater", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
 
     debug_printf("Message handler loop\n");
