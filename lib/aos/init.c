@@ -138,7 +138,7 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // Initialize ram_alloc state
     ram_alloc_init();
     /* All domains use smallcn to initialize */
-    err = ram_alloc_set(ram_alloc_fixed);
+    err = ram_alloc_set(/*init_domain ? */ram_alloc_fixed/* : NULL*/);
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_RAM_ALLOC_SET);
     }
@@ -176,14 +176,16 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     struct capref frame;
     size_t retsize;
     CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
-            aos_rpc_get_ram_cap(rpc, BASE_PAGE_SIZE, &frame, &retsize));
+            aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
+    debug_printf("init.c: Client asked for %u memory, was given %u\n",
+        16 * 1024 * 1024, retsize);
 
     void* buf;
     err = paging_map_frame_attr(get_current_paging_state(),
         &buf, retsize, frame,
         VREGION_FLAGS_READ_WRITE, NULL, NULL);
     if (err_is_fail(err)) {
-        DEBUG_ERR(err, "PANIC MAPPING 4K FRAME IN CHILD");
+        DEBUG_ERR(err, "PANIC MAPPING 16 MB FRAME IN CHILD");
     }
 
     debug_printf("init.c: testing memory @ %p\n", buf);
@@ -192,20 +194,34 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     sys_debug_flush_cache();
     debug_printf("%c\n", *cbuf);
 
-    cbuf += 1024;
+    cbuf += 4 * 1024 * 1024;
     *cbuf = 'K';
     sys_debug_flush_cache();
     debug_printf("%c\n", *cbuf);
 
-    cbuf += 1024;
+    cbuf += 4 * 1024 * 1024;
     *cbuf = 'L';
     sys_debug_flush_cache();
     debug_printf("%c\n", *cbuf);
 
-    cbuf += 1024;
+    cbuf += 4 * 1024 * 1024;
     *cbuf = 'M';
     sys_debug_flush_cache();
     debug_printf("%c\n", *cbuf);
+
+    // Ask for more memory -- attempt to break 64 MB limitation.
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
+            aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
+    debug_printf("init.c: Client asked for %u memory, was given %u\n",
+        16 * 1024 * 1024, retsize);
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
+            aos_rpc_get_ram_cap(rpc, 16 * 1024 * 1024, &frame, &retsize));
+    debug_printf("init.c: Client asked for %u memory, was given %u\n",
+        16 * 1024 * 1024, retsize);
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_get_ram_cap",
+            aos_rpc_get_ram_cap(rpc, 24 * 1024 * 1024, &frame, &retsize));
+    debug_printf("init.c: Client asked for %u memory, was given %u\n",
+        24 * 1024 * 1024, retsize);
 
     // RPC send number.
     CHECK("init.c#barrelfish_init_onthread: aos_rpc_send_number",

@@ -29,10 +29,13 @@
 coreid_t my_core_id;
 struct bootinfo *bi;
 
+#define MAX_CLIENT_RAM 64 * 1024 * 1024
+
 struct client_state {
-    struct lmp_chan lc;
-    char* str_buf;
-    size_t str_buf_idx;
+    struct lmp_chan lc;  // LMP channel.
+    char* str_buf;       // buffer for send_string messages.
+    size_t str_buf_idx;  // current index in string buffer.
+    size_t ram;          // how much RAM this client's currently holding.
 } *clients = NULL;
 size_t num_conns;
 
@@ -61,6 +64,7 @@ uintptr_t* process_handshake_request(struct lmp_chan *lc,
     }
 
     // Initialize client state.
+    clients[num_conns].ram = 0;
     clients[num_conns].str_buf = NULL;
     clients[num_conns].str_buf_idx = 0;
     clients[num_conns].lc = *lc;
@@ -82,15 +86,32 @@ uintptr_t* process_handshake_request(struct lmp_chan *lc,
     return args;
 }
 
+/**
+ * \brief Process a memory request by allocating a frame for the client and
+ * returning a cap for it.
+ * The client specifies how much memory it wants in msg->words[2].
+ * Namely, message format is (request_id_ram, client_id, size_requested).
+ * The requested size is rounded to BASE_PAGE_SIZE and limited to 64 MB.
+ */
 uintptr_t* process_memory_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap)
 {
     uint32_t conn = msg->words[1];
     size_t req_size = (size_t) msg->words[2];
+    req_size = ROUND_UP(req_size, BASE_PAGE_SIZE);
+    if (req_size == 0) {
+        // Waht?!
+        req_size = BASE_PAGE_SIZE;
+    }
+    if (req_size + clients[conn].ram >= MAX_CLIENT_RAM) {
+        // Limit to 64 MB.
+        req_size = MAX_CLIENT_RAM - clients[conn].ram;
+    }
     size_t ret_size;
 
     // Allocate frame.
     errval_t err = frame_alloc(remote_cap, req_size, &ret_size);
+    clients[conn].ram += ret_size;
 
     // Response args.
     // 1. Channel to send down.
@@ -146,8 +167,6 @@ uintptr_t* process_putchar_request(struct lmp_recv_msg* msg)
 
 uintptr_t* process_string_request(struct lmp_recv_msg* msg)
 {
-    debug_printf("main.c: process process_string_request with remaining %u\n", (size_t) msg->words[2]);
-
     uint32_t conn = msg->words[1];
     uint32_t remaining = msg->words[2];
 
