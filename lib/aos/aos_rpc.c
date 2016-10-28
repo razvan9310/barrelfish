@@ -13,6 +13,7 @@
  */
 
 #include <aos/aos_rpc.h>
+#include <string.h>
 
 // defined at the end
 uint32_t perf_measurement_get_counter(void);
@@ -99,8 +100,90 @@ errval_t aos_rpc_send_number(struct aos_rpc *chan, uintptr_t val)
     return SYS_ERR_OK;
 }
 
+/**
+ * \brief String handler.
+ */
+errval_t aos_rpc_send_string_send_handler(void* void_args)
+{
+    uintptr_t* args = (uintptr_t*) void_args;
+    
+    // TODO: implement functionality to send a number ofer the channel
+    // given channel and wait until the ack gets returned.
+    struct aos_rpc *rpc = (struct aos_rpc*) args[0];
+
+    CHECK("aos_rpc.c#aos_rpc_send_string_handler: lmp_chan_send9",
+            lmp_chan_send9(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
+                    AOS_RPC_STRING, rpc->client_id,(uintptr_t) args[7], (uintptr_t) args[1], (uintptr_t) args[2], 
+                    (uintptr_t) args[3], (uintptr_t) args[4], (uintptr_t) args[5], (uintptr_t) args[6]));
+
+    return SYS_ERR_OK;
+}
+
+/**
+ * \brief String response.
+ */
+errval_t aos_rpc_send_string_recv_handler(void* void_args)
+{
+    uintptr_t* args = (uintptr_t*) void_args;
+    
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    struct capref cap;
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister.
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_send_string_recv_handler, args));
+    }
+
+    assert(msg.buf.msglen == 1);
+
+    assert(msg.words[0] == AOS_RPC_OK);
+    // No need to reregister, we got our RAM.
+    return err;
+}
+
 errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string)
 {
+    // break string into pieces
+    uintptr_t* args = (uintptr_t*) malloc(8 * sizeof(uintptr_t));
+    args[0] = (uintptr_t) ((struct aos_rpc*) malloc(sizeof(struct aos_rpc)));
+    *((struct aos_rpc*) args[0]) = *chan;
+
+    uint32_t len = strlen(string);
+    uint32_t romaining_len = len;
+    char words[24];
+    char buf[4];
+    for(int i=0; i<=(len/24); i++) {
+        memcpy(words, string + i*24, 24);
+        args[7] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));
+        *((uint32_t*) args[7]) = romaining_len;
+        if(romaining_len > 24) {
+            for(int j=0; j<6; j++) {
+                memcpy(buf, words+(j*4), 4);
+                args[j+1] = (uintptr_t) ((char*) malloc(4*sizeof(char)));
+                *((char*) args[j+1]) = (uintptr_t)buf;
+            }
+            romaining_len -= 24;
+        }else {
+            for(int j=0; j<=(romaining_len/4); j++) {
+                memcpy(buf, words+(j*4), 4);
+                args[j+1] = (uintptr_t) ((char*) malloc(4*sizeof(char)));
+                *((char*) args[j+1]) = (uintptr_t)buf;
+            }
+        }
+        CHECK("aos_rpc.c#aos_rpc_send_string: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(args, aos_rpc_send_string_send_handler,
+                    aos_rpc_send_string_recv_handler));
+    }
+    // for each piece: call send_and_receive sequentially
+    // when all have completed OK then return OK
+
+    // one chunk should contain:
+    // AOS_RPC_STRING, client_id, characters_left. => 6 * 4 = 24 characters per chunk
+    // {dcba}
+
     // TODO: implement functionality to send a string over the given channel
     // and wait for a response.
     return SYS_ERR_OK;
