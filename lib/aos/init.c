@@ -81,6 +81,15 @@ static size_t syscall_terminal_write(const char *buf, size_t len)
     return 0;
 }
 
+static size_t aos_terminal_write(const char* buf, size_t len)
+{
+    if (len > 0) {
+        debug_printf("init.c: calling aos_rpc_send_string\n");
+        return aos_rpc_send_string(get_init_rpc(), buf);
+    }
+    return 0;
+}
+
 static size_t dummy_terminal_read(char *buf, size_t len)
 {
     debug_printf("terminal read NYI! returning %d characters read\n", len);
@@ -94,7 +103,7 @@ void barrelfish_libc_glue_init(void)
     // what we need for that
     // TODO: change these to use the user-space serial driver if possible
     _libc_terminal_read_func = dummy_terminal_read;
-    _libc_terminal_write_func = syscall_terminal_write;
+    _libc_terminal_write_func = init_domain ? syscall_terminal_write : aos_terminal_write;
     _libc_exit_func = libc_exit;
     _libc_assert_func = libc_assert;
     /* morecore func is setup by morecore_init() */
@@ -205,48 +214,52 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // RPC putchar.
     CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
             aos_rpc_serial_putchar(rpc, 'T'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'H'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'I'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'S'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, ' '));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'I'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'S'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, ' '));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'A'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, ' '));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'F'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, '*'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, '*'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, '*'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'I'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'N'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'G'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, ' '));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'R'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'P'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, 'C'));
-    CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
-            aos_rpc_serial_putchar(rpc, '\n'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'H'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'I'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'S'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, ' '));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'I'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'S'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, ' '));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'A'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, ' '));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'F'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, '*'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, '*'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, '*'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'I'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'N'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'G'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, ' '));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'R'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'P'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, 'C'));
+    // CHECK("init.c#barrelfish_init_onthread: aos_rpc_serial_putchar",
+    //         aos_rpc_serial_putchar(rpc, '\n'));
+
+    // Stringz.
+    CHECK("init.c#barrelfish_init_onthread: aos_rpc_send_string",
+            aos_rpc_send_string(rpc, "this is such a long it makes me sad\n"));
 
     // right now we don't have the nameservice & don't need the terminal
     // and domain spanning, so we return here

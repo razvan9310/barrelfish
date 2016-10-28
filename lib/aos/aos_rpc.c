@@ -113,8 +113,10 @@ errval_t aos_rpc_send_string_send_handler(void* void_args)
 
     CHECK("aos_rpc.c#aos_rpc_send_string_handler: lmp_chan_send9",
             lmp_chan_send9(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
-                    AOS_RPC_STRING, rpc->client_id,(uintptr_t) args[7], (uintptr_t) args[1], (uintptr_t) args[2], 
-                    (uintptr_t) args[3], (uintptr_t) args[4], (uintptr_t) args[5], (uintptr_t) args[6]));
+                    AOS_RPC_STRING, rpc->client_id, *((uintptr_t*) args[7]),
+                    *((uintptr_t*) args[1]), *((uintptr_t*) args[2]), 
+                    *((uintptr_t*) args[3]), *((uintptr_t*) args[4]),
+                    *((uintptr_t*) args[5]), *((uintptr_t*) args[6])));
 
     return SYS_ERR_OK;
 }
@@ -144,7 +146,7 @@ errval_t aos_rpc_send_string_recv_handler(void* void_args)
     return err;
 }
 
-errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string)
+errval_t aos_rpc_send_string(struct aos_rpc* chan, const char* string)
 {
     // break string into pieces
     uintptr_t* args = (uintptr_t*) malloc(8 * sizeof(uintptr_t));
@@ -152,25 +154,43 @@ errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string)
     *((struct aos_rpc*) args[0]) = *chan;
 
     uint32_t len = strlen(string);
-    uint32_t romaining_len = len;
+    uint32_t rem_len = len;
     char words[24];
     char buf[4];
     for(int i=0; i<=(len/24); i++) {
-        memcpy(words, string + i*24, 24);
+        //memcpy(words, string + i*24, 24);
         args[7] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));
-        *((uint32_t*) args[7]) = romaining_len;
-        if(romaining_len > 24) {
+        *((uint32_t*) args[7]) = rem_len;
+        if(rem_len > 24) {
+            memcpy(words, string + i*24, 24);
             for(int j=0; j<6; j++) {
                 memcpy(buf, words+(j*4), 4);
                 args[j+1] = (uintptr_t) ((char*) malloc(4*sizeof(char)));
-                *((char*) args[j+1]) = (uintptr_t)buf;
+                *((char*) args[j+1]) = *buf;
+                *((char*) args[j+1] + 1) = *(buf + 1);
+                *((char*) args[j+1] + 2) = *(buf + 2);
+                *((char*) args[j+1] + 3) = *(buf + 3);
             }
-            romaining_len -= 24;
+            rem_len -= 24;
         }else {
-            for(int j=0; j<=(romaining_len/4); j++) {
+            memcpy(words, string + i*24, rem_len);
+            rem_len = 24;
+            //printf("Remaining Length %d\n", rem_len);
+            for(int k=len; k<rem_len; k++) words[k] = 0;
+            //printf("%s\n", words);
+            // for(int p=0; p<24; p++) {
+            //     printf("%s\n", words[p]);
+            // }
+            
+            for(int j=0; j<(rem_len/4); j++) {
                 memcpy(buf, words+(j*4), 4);
+                //debug_printf("%%%%%%%% %c %c %c %c",buf[j], buf[j+1], buf[j+2], buf[j+3]);
                 args[j+1] = (uintptr_t) ((char*) malloc(4*sizeof(char)));
-                *((char*) args[j+1]) = (uintptr_t)buf;
+                *((char*) args[j+1]) = *buf;
+                *((char*) args[j+1] + 1) = *(buf + 1);
+                *((char*) args[j+1] + 2) = *(buf + 2);
+                *((char*) args[j+1] + 3) = *(buf + 3);
+                //printf("%s\n", args[j+1]);
             }
         }
         CHECK("aos_rpc.c#aos_rpc_send_string: aos_rpc_send_and_receive",

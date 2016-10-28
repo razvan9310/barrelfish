@@ -29,7 +29,11 @@
 coreid_t my_core_id;
 struct bootinfo *bi;
 
-struct lmp_chan* clients = NULL;
+struct client_state {
+    struct lmp_chan lc;
+    char* str_buf;
+    size_t str_buf_idx;
+} *clients = NULL;
 size_t num_conns;
 
 errval_t recv_handler(void* arg);
@@ -40,32 +44,34 @@ uintptr_t* process_memory_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap);
 uintptr_t* process_number_request(struct lmp_recv_msg* msg);
 uintptr_t* process_putchar_request(struct lmp_recv_msg* msg);
+uintptr_t* process_string_request(struct lmp_recv_msg* msg);
 
 errval_t send_handshake(void* void_args);
 errval_t send_memory(void* void_args);
-errval_t send_number(void* void_args);
-errval_t send_putchar(void* void_args);
+errval_t send_simple_ok(void* void_args);
 
 uintptr_t* process_handshake_request(struct lmp_chan *lc,
         struct capref* remote_cap)
 {
     // Create channel for newly connecting client.
     if (clients == NULL) {
-        clients = malloc(sizeof(struct lmp_chan));
+        clients = malloc(sizeof(struct client_state));
     } else {
-        realloc(clients, (num_conns + 1) * sizeof(struct lmp_chan));
+        realloc(clients, (num_conns + 1) * sizeof(struct client_state));
     }
 
-    // Initialize dedicated channel.
-    clients[num_conns] = *lc;
+    // Initialize client state.
+    clients[num_conns].str_buf = NULL;
+    clients[num_conns].str_buf_idx = 0;
+    clients[num_conns].lc = *lc;
     // Set remote cap.
-    clients[num_conns].remote_cap = *remote_cap;
+    clients[num_conns].lc.remote_cap = *remote_cap;
 
     // Fill in response args.
     uintptr_t* args = (uintptr_t*) malloc(2 * sizeof(uintptr_t));
     // First arg is the channel to send the response down.
     args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[num_conns];
+    *((struct lmp_chan*) args[0]) = clients[num_conns].lc;
     // Second arg is the 32-bit client tag (ID).
     args[1] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));                
     *((uint32_t*) args[1]) = num_conns;
@@ -80,17 +86,29 @@ uintptr_t* process_memory_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap)
 {
     uint32_t conn = msg->words[1];
+    size_t req_size = (size_t) msg->words[2];
+    size_t ret_size;
+
+    // Allocate frame.
+    errval_t err = frame_alloc(remote_cap, req_size, &ret_size);
+
     // Response args.
     // 1. Channel to send down.
-    // 2. Cap to fill with memory.
-    // 3. Requested size.
-    uintptr_t* args = (uintptr_t*) malloc(3 * sizeof(uintptr_t));
+    // 2. Error code from frame_alloc.
+    // 3. Cap for memory.
+    // 4. Returned size.
+    uintptr_t* args = (uintptr_t*) malloc(4 * sizeof(uintptr_t));
     args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[conn];
-    args[1] = (uintptr_t) ((struct capref*) malloc(sizeof(struct capref)));
-    *((struct capref*) args[1]) = *remote_cap;
-    args[2] = (uintptr_t) ((size_t*) malloc(sizeof(size_t)));
-    *((size_t*) args[2]) = (size_t) msg->words[2];
+    *((struct lmp_chan*) args[0]) = clients[conn].lc;
+
+    args[1] = (uintptr_t) ((errval_t*) malloc(sizeof(errval_t)));
+    *((errval_t*) args[1]) = err;
+
+    args[2] = (uintptr_t) ((struct capref*) malloc(sizeof(struct capref)));
+    *((struct capref*) args[2]) = *remote_cap;
+
+    args[3] = (uintptr_t) ((size_t*) malloc(sizeof(size_t)));
+    *((size_t*) args[3]) = ret_size;
 
     return args;
 }
@@ -102,7 +120,7 @@ uintptr_t* process_number_request(struct lmp_recv_msg* msg)
     uintptr_t* args = (uintptr_t*) malloc(sizeof(uintptr_t));
     // First arg is the channel to send the response down.
     args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[conn];
+    *((struct lmp_chan*) args[0]) = clients[conn].lc;
 
     // Print what we got.
     uint32_t number = msg->words[2];
@@ -113,16 +131,52 @@ uintptr_t* process_number_request(struct lmp_recv_msg* msg)
 
 uintptr_t* process_putchar_request(struct lmp_recv_msg* msg)
 {
+    // Put character.
+    sys_print((char*) &msg->words[2], 1);
+
     uint32_t conn = msg->words[1];
     // Fill in response args.
-    uintptr_t* args = (uintptr_t*) malloc(sizeof(2 * sizeof(uintptr_t)));
+    uintptr_t* args = (uintptr_t*) malloc(sizeof(sizeof(uintptr_t)));
     // First arg is the channel to send the response down.
     args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[conn];
+    *((struct lmp_chan*) args[0]) = clients[conn].lc;
 
-    // Second arg is the character to put.
-    args[1] = (uintptr_t) ((char*) malloc(sizeof(char*)));
-    *((char*) args[1]) = (char) msg->words[2];
+    return args;
+}
+
+uintptr_t* process_string_request(struct lmp_recv_msg* msg)
+{
+    debug_printf("main.c: process process_string_request with remaining %u\n", (size_t) msg->words[2]);
+
+    uint32_t conn = msg->words[1];
+    uint32_t remaining = msg->words[2];
+
+    if (clients[conn].str_buf == NULL) {
+        clients[conn].str_buf = (char*) malloc(remaining * sizeof(char));
+        clients[conn].str_buf_idx = 0;
+    }
+
+    size_t stop = remaining < 24 ? remaining : 24;
+    for (size_t i = 0; i < stop; ++i) {
+        uint32_t word = msg->words[3 + i / 4];
+        clients[conn].str_buf[clients[conn].str_buf_idx++] =
+                (char) (word >> (8 * (i % 4)));
+    }
+
+    remaining -= stop;
+    if (remaining == 0) {
+        // Print and reset.
+        sys_print(clients[conn].str_buf, clients[conn].str_buf_idx);
+        clients[conn].str_buf_idx = 0;
+        free(clients[conn].str_buf);
+        clients[conn].str_buf = NULL;
+    }
+
+    // Fill in response args.
+    uintptr_t* args = (uintptr_t*) malloc(sizeof(sizeof(uintptr_t)));
+    // First arg is the channel to send the response down.
+    args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
+    *((struct lmp_chan*) args[0]) = clients[conn].lc;
 
     return args;
 }
@@ -156,12 +210,16 @@ errval_t recv_handler(void* arg)
                 response_args = process_memory_request(&msg, &cap);
                 break;
             case AOS_RPC_NUMBER:
-                response = (void*) send_number;
+                response = (void*) send_simple_ok;
                 response_args = process_number_request(&msg);
                 break;
             case AOS_RPC_PUTCHAR:
-                response = (void*) send_putchar;
+                response = (void*) send_simple_ok;
                 response_args = process_putchar_request(&msg);
+                break;
+            case AOS_RPC_STRING:
+                response = (void*) send_simple_ok;
+                response_args = process_string_request(&msg);
                 break;
             default:
                 return 1;  // TODO: More meaning plz
@@ -207,32 +265,32 @@ errval_t send_memory(void* void_args)
     
     // 1. Get channel to send down.
     struct lmp_chan* lc = (struct lmp_chan*) args[0];
-    // 2. Get cap to fill.
-    struct capref* retcap = (struct capref*) args[1];
-    // 3. Get requested size.
-    size_t* size = (size_t*) args[2];
+    // 2. Get error code.
+    errval_t* err = (errval_t*) args[1];
+    // 3. Get cap for memory.
+    struct capref* retcap = (struct capref*) args[2];
+    // 4. Get returned size.
+    size_t* size = (size_t*) args[3];
 
-    // 4. Allocate frame.
-    size_t retsize = 0;
-    errval_t err = frame_alloc(retcap, *size, &retsize);
     // 5. Generate response code.
-    size_t code = err_is_fail(err) ? AOS_RPC_FAILED : AOS_RPC_OK;
+    size_t code = err_is_fail(*err) ? AOS_RPC_FAILED : AOS_RPC_OK;
 
     // 6. Send response.
     CHECK("lmp_chan_send memory",
-            lmp_chan_send3(lc, LMP_FLAG_SYNC, *retcap, code, (uintptr_t) err,
-                    retsize));
+            lmp_chan_send3(lc, LMP_FLAG_SYNC, *retcap, code, (uintptr_t) *err,
+                    *size));
 
     // 7 Free args.
     free(size);
     free(retcap);
+    free(err);
     free(lc);
     free(args);
 
     return SYS_ERR_OK;
 }
 
-errval_t send_number(void* void_args)
+errval_t send_simple_ok(void* void_args)
 {
     uintptr_t* args = (uintptr_t*) void_args;
 
@@ -240,31 +298,10 @@ errval_t send_number(void* void_args)
     struct lmp_chan* lc = (struct lmp_chan*) args[0];
 
     // 2. Send response.
-    CHECK("lmp_chan_send number",
-            lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
-
-    // 4. Free args.
-    free(lc);
-    free(args);
-
-    return SYS_ERR_OK;
-}
-
-errval_t send_putchar(void* void_args)
-{
-    uintptr_t* args = (uintptr_t*) void_args;
-
-    // 1. Put character.
-    char* c = (char*) args[1];
-    sys_print(c, 1);
-
-    // 2. Send response.
-    struct lmp_chan* lc = (struct lmp_chan*) args[0];
     CHECK("lmp_chan_send putchar",
             lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
 
     // 3. Free args.
-    free(c);
     free(lc);
     free(args);
 
