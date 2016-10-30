@@ -76,6 +76,7 @@ uintptr_t* process_handshake_request(struct lmp_chan *lc,
     // First arg is the channel to send the response down.
     args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
     *((struct lmp_chan*) args[0]) = clients[num_conns].lc;
+
     // Second arg is the 32-bit client tag (ID).
     args[1] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));                
     *((uint32_t*) args[1]) = num_conns;
@@ -424,10 +425,8 @@ int main(int argc, char *argv[])
     // spawn a few helloz
     // spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     // spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    //spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    //spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    spawn_load_by_name("memeater", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
+    spawn_load_by_name("memeater", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
     debug_printf("Message handler loop\n");
     // Hang around

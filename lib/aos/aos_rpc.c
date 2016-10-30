@@ -532,6 +532,7 @@ errval_t aos_rpc_init(struct aos_rpc *rpc, struct waitset* ws)
     // 1. Create local channel using init as remote endpoint.
     CHECK("aos_rpc.c#aos_rpc_init: lmp_chan_accept",
             lmp_chan_accept(&rpc->lc, DEFAULT_LMP_BUF_WORDS, cap_initep));
+    debug_printf("aos_rpc_init: LOCAL CAP HAS SLOT %d\n", rpc->lc.local_cap.slot);
 
     // 2. Marshal args.
     uintptr_t* args = (uintptr_t*) malloc(sizeof(uintptr_t));
