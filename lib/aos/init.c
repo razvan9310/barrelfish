@@ -169,9 +169,9 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     struct aos_rpc* rpc = (struct aos_rpc*) malloc(sizeof(struct aos_rpc));
     CHECK("init.c#barrelfish_init_onthread: aos_rpc_init",
             aos_rpc_init(rpc, get_default_waitset()));
-    debug_printf("init.c: successfully setup connection with init\n");
     // Set domain init rpc.
     set_init_rpc(rpc);
+    debug_printf("init.c: successfully setup connection with init\n");
 
     // struct capref frame;
     // size_t retsize;

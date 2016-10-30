@@ -67,15 +67,19 @@ uintptr_t* process_handshake_request(struct lmp_chan *lc,
     clients[num_conns].ram = 0;
     clients[num_conns].str_buf = NULL;
     clients[num_conns].str_buf_idx = 0;
-    clients[num_conns].lc = *lc;
-    // Set remote cap.
-    clients[num_conns].lc.remote_cap = *remote_cap;
+
+    // New channel.
+    lmp_chan_accept(&clients[num_conns].lc, DEFAULT_LMP_BUF_WORDS, *remote_cap);
+    lmp_chan_alloc_recv_slot(&clients[num_conns].lc);
+    lmp_chan_register_recv(&clients[num_conns].lc, get_default_waitset(),
+            MKCLOSURE((void*) recv_handler, &clients[num_conns].lc));
 
     // Fill in response args.
     uintptr_t* args = (uintptr_t*) malloc(2 * sizeof(uintptr_t));
     // First arg is the channel to send the response down.
     args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
     *((struct lmp_chan*) args[0]) = clients[num_conns].lc;
+
     // Second arg is the 32-bit client tag (ID).
     args[1] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));                
     *((uint32_t*) args[1]) = num_conns;
@@ -207,11 +211,11 @@ errval_t recv_handler(void* arg)
     // printf("msg buflen %d\n", msg.buf.buflen);
     struct capref cap;
     errval_t err = lmp_chan_recv(lc, &msg, &cap);
-    if (err_is_fail(err) && lmp_err_is_transient(err)) {
-        // reregister
-        lmp_chan_register_recv(lc, get_default_waitset(),
-                MKCLOSURE((void* )recv_handler, arg));
-    }
+    
+    // Reregister.
+    CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
+    lmp_chan_register_recv(lc, get_default_waitset(),
+            MKCLOSURE((void *)recv_handler, arg));
 
     // debug_printf("main.c: got message of size %u\n", msg.buf.msglen);
     if (msg.buf.msglen > 0) {
@@ -248,11 +252,6 @@ errval_t recv_handler(void* arg)
                 lmp_chan_register_send(lc, get_default_waitset(),
                         MKCLOSURE(response, response_args)));  
     }
-
-    // Reregister.
-    CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
-    lmp_chan_register_recv(lc, get_default_waitset(),
-            MKCLOSURE((void *)recv_handler, arg));
 
     return err;
 }
@@ -424,10 +423,8 @@ int main(int argc, char *argv[])
     // spawn a few helloz
     // spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     // spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    //spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    //spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    spawn_load_by_name("memeater", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
+    spawn_load_by_name("memeater", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
     debug_printf("Message handler loop\n");
     // Hang around
