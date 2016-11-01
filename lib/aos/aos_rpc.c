@@ -387,8 +387,8 @@ errval_t aos_rpc_putchar_send_handler(void* void_args)
 
     uintptr_t* args = (uintptr_t*) void_args;
 
-   struct aos_rpc* rpc = (struct aos_rpc*) args[0];
-   char* to_put = (char*) args[1];
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    char* to_put = (char*) args[1];
 
     errval_t err;
     size_t retries = 0;
