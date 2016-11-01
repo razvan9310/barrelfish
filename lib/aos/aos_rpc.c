@@ -33,8 +33,8 @@ errval_t aos_rpc_send_number_send_handler(void* void_args)
     struct aos_rpc *rpc = (struct aos_rpc*) args[0];
     uintptr_t *number = (uintptr_t*) args[1];
     CHECK("aos_rpc.c#aos_rpc_send_number_handler: lmp_chan_send3",
-            lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
-                    AOS_RPC_NUMBER, 0, *number));
+            lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                    AOS_RPC_NUMBER, *number));
 
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
@@ -112,11 +112,12 @@ errval_t aos_rpc_send_string_send_handler(void* void_args)
     struct aos_rpc *rpc = (struct aos_rpc*) args[0];
 
     CHECK("aos_rpc.c#aos_rpc_send_string_handler: lmp_chan_send9",
-            lmp_chan_send9(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
-                    AOS_RPC_STRING, rpc->client_id, *((uintptr_t*) args[7]),
+            lmp_chan_send9(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                    AOS_RPC_STRING, *((uintptr_t*) args[8]),
                     *((uintptr_t*) args[1]), *((uintptr_t*) args[2]), 
                     *((uintptr_t*) args[3]), *((uintptr_t*) args[4]),
-                    *((uintptr_t*) args[5]), *((uintptr_t*) args[6])));
+                    *((uintptr_t*) args[5]), *((uintptr_t*) args[6]),
+                    *((uintptr_t*) args[7])));
 
     return SYS_ERR_OK;
 }
@@ -155,15 +156,15 @@ errval_t aos_rpc_send_string(struct aos_rpc* chan, const char* string)
 
     uint32_t len = strlen(string);
     uint32_t rem_len = len;
-    char words[24];
+    char words[28];
     char buf[4];
-    for(int i=0; i<=(len/24); i++) {
-        //memcpy(words, string + i*24, 24);
-        args[7] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));
-        *((uint32_t*) args[7]) = rem_len;
-        if(rem_len > 24) {
-            memcpy(words, string + i*24, 24);
-            for(int j=0; j<6; j++) {
+    for(int i=0; i<=(len/28); i++) {
+        //memcpy(words, string + i*28, 28);
+        args[8] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));
+        *((uint32_t*) args[8]) = rem_len;
+        if(rem_len > 28) {
+            memcpy(words, string + i*28, 28);
+            for(int j=0; j<7; j++) {
                 memcpy(buf, words+(j*4), 4);
                 args[j+1] = (uintptr_t) ((char*) malloc(4*sizeof(char)));
                 *((char*) args[j+1]) = *buf;
@@ -171,14 +172,14 @@ errval_t aos_rpc_send_string(struct aos_rpc* chan, const char* string)
                 *((char*) args[j+1] + 2) = *(buf + 2);
                 *((char*) args[j+1] + 3) = *(buf + 3);
             }
-            rem_len -= 24;
+            rem_len -= 28;
         }else {
-            memcpy(words, string + i*24, rem_len);
-            rem_len = 24;
+            memcpy(words, string + i*28, rem_len);
+            rem_len = 28;
             //printf("Remaining Length %d\n", rem_len);
             for(int k=len; k<rem_len; k++) words[k] = 0;
             //printf("%s\n", words);
-            // for(int p=0; p<24; p++) {
+            // for(int p=0; p<28; p++) {
             //     printf("%s\n", words[p]);
             // }
             
@@ -201,7 +202,7 @@ errval_t aos_rpc_send_string(struct aos_rpc* chan, const char* string)
     // when all have completed OK then return OK
 
     // one chunk should contain:
-    // AOS_RPC_STRING, client_id, characters_left. => 6 * 4 = 24 characters per chunk
+    // AOS_RPC_STRING, characters_left. => 6 * 4 = 28 characters per chunk
     // {dcba}
 
     // TODO: implement functionality to send a string over the given channel
@@ -223,14 +224,11 @@ errval_t aos_rpc_ram_send_handler(void* void_args)
     struct aos_rpc *rpc = (struct aos_rpc*) args[0];
     // 2. request_bytes
     size_t* req_bytes = (size_t*) args[1];
-    // 3. retcap
-    struct capref* retcap = (struct capref*) args[2];
-    // 4. ret_bytes is not used here.
 
     // 5. Perform send.
     CHECK("aos_rpc.c#aos_rpc_ram_send_handler: lmp_chan_send0",
-            lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, *retcap,
-                    AOS_RPC_MEMORY, rpc->client_id, *req_bytes));
+            lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                    AOS_RPC_MEMORY, *req_bytes));
 
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
@@ -371,8 +369,8 @@ errval_t aos_rpc_putchar_send_handler(void* void_args)
    char* to_put = (char*) args[1];
 
    CHECK("aos_rpc.c#aos_rpc_putchar_send_handler: lmp_chan_send0",
-           lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, NULL_CAP,
-                   AOS_RPC_PUTCHAR, 0, *to_put));
+           lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                   AOS_RPC_PUTCHAR, *to_put));
 
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
@@ -447,9 +445,12 @@ errval_t aos_rpc_handshake_send_handler(void* void_args)
     uintptr_t* args = (uintptr_t*) void_args;
 
     struct aos_rpc *rpc = (struct aos_rpc*) args[0];
-    CHECK("aos_rpc.c#aos_rpc_handshake_send_handler: lmp_chan_send0",
-            lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
-                    AOS_RPC_HANDSHAKE));
+    errval_t err;
+    do {
+        err = lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                AOS_RPC_HANDSHAKE);
+
+    } while (err_is_fail(err));
 
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
@@ -481,10 +482,9 @@ errval_t aos_rpc_handshake_recv_handler(void* void_args)
                 MKCLOSURE((void*) aos_rpc_handshake_recv_handler, args));
     }
 
-    // We should have an ACK with a client ID.
-    assert(msg.buf.msglen == 2);
+    // We should have an ACK.
+    assert(msg.buf.msglen == 1);
     assert(msg.words[0] == AOS_RPC_OK);
-    rpc->client_id = (uint32_t) msg.words[1];
 
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();

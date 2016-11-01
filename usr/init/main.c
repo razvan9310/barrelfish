@@ -36,58 +36,88 @@ struct client_state {
     char* str_buf;       // buffer for send_string messages.
     size_t str_buf_idx;  // current index in string buffer.
     size_t ram;          // how much RAM this client's currently holding.
+
+    struct EndPoint remote_ep;  // Used to identify clients.
+
+    // Doubly-linked list.
+    struct client_state* next;
+    struct client_state* prev;
 } *clients = NULL;
-size_t num_conns;
+
+struct client_state* identify_client(struct capref* cap);
 
 errval_t recv_handler(void* arg);
 
-uintptr_t* process_handshake_request(struct lmp_chan* lc,
+void* process_handshake_request(struct capref* remote_cap);
+void* process_memory_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap);
-uintptr_t* process_memory_request(struct lmp_recv_msg* msg,
+void* process_number_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap);
-uintptr_t* process_number_request(struct lmp_recv_msg* msg);
-uintptr_t* process_putchar_request(struct lmp_recv_msg* msg);
-uintptr_t* process_string_request(struct lmp_recv_msg* msg);
+void* process_putchar_request(struct lmp_recv_msg* msg,
+        struct capref* remote_cap);
+void* process_string_request(struct lmp_recv_msg* msg,
+        struct capref* remote_cap);
 
-errval_t send_handshake(void* void_args);
-errval_t send_memory(void* void_args);
-errval_t send_simple_ok(void* void_args);
+errval_t send_handshake(void* args);
+errval_t send_memory(void* args);
+errval_t send_simple_ok(void* args);
 
-uintptr_t* process_handshake_request(struct lmp_chan *lc,
-        struct capref* remote_cap)
+struct client_state* identify_client(struct capref* cap)
 {
-    // Create channel for newly connecting client.
-    if (clients == NULL) {
-        clients = malloc(sizeof(struct client_state));
-    } else {
-        realloc(clients, (num_conns + 1) * sizeof(struct client_state));
+    struct capability ret;
+    errval_t err = debug_cap_identify(*cap, &ret);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "identifying client cap");
+        return NULL;
     }
 
+    struct client_state* client = clients;
+    while (client != NULL) {
+        if (client->remote_ep.listener == ret.u.endpoint.listener
+                && client->remote_ep.epoffset == ret.u.endpoint.epoffset) {
+            break;
+        }
+        client = client->next;
+    }
+    
+    return client;
+}
+
+void* process_handshake_request(struct capref* remote_cap)
+{
+    struct client_state* existing = identify_client(remote_cap);
+    if (existing != NULL) {
+        // No point opening new channel.
+        return (void*) &existing->lc;
+    }
+
+    // Create state for newly connecting client.
+    struct client_state* new_client = (struct client_state*) malloc(
+            sizeof(struct client_state));
+    if (clients == NULL) {
+        new_client->next = new_client->prev = NULL;
+    } else {
+        clients->prev = new_client;
+        new_client->next = clients;
+        new_client->prev = NULL;
+    }
+    clients = new_client;
+
     // Initialize client state.
-    clients[num_conns].ram = 0;
-    clients[num_conns].str_buf = NULL;
-    clients[num_conns].str_buf_idx = 0;
+    new_client->ram = 0;
+    new_client->str_buf = NULL;
+    new_client->str_buf_idx = 0;
+
+    // Endpoint for further reference.
+    struct capability ret;
+    debug_cap_identify(*remote_cap, &ret);
+    new_client->remote_ep = ret.u.endpoint;
 
     // New channel.
-    lmp_chan_accept(&clients[num_conns].lc, DEFAULT_LMP_BUF_WORDS, *remote_cap);
-    lmp_chan_alloc_recv_slot(&clients[num_conns].lc);
-    lmp_chan_register_recv(&clients[num_conns].lc, get_default_waitset(),
-            MKCLOSURE((void*) recv_handler, &clients[num_conns].lc));
+    lmp_chan_accept(&new_client->lc, DEFAULT_LMP_BUF_WORDS, *remote_cap);
 
-    // Fill in response args.
-    uintptr_t* args = (uintptr_t*) malloc(2 * sizeof(uintptr_t));
-    // First arg is the channel to send the response down.
-    args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[num_conns].lc;
-
-    // Second arg is the 32-bit client tag (ID).
-    args[1] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));                
-    *((uint32_t*) args[1]) = num_conns;
-
-    // Keep track o incremented number of connections.
-    ++num_conns;
-
-    return args;
+    // Return response args.
+    return (void*) &new_client->lc;
 }
 
 /**
@@ -97,111 +127,134 @@ uintptr_t* process_handshake_request(struct lmp_chan *lc,
  * Namely, message format is (request_id_ram, client_id, size_requested).
  * The requested size is rounded to BASE_PAGE_SIZE and limited to 64 MB.
  */
-uintptr_t* process_memory_request(struct lmp_recv_msg* msg,
+void* process_memory_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap)
 {
-    uint32_t conn = msg->words[1];
-    size_t req_size = (size_t) msg->words[2];
+    struct client_state* client = identify_client(remote_cap);
+    if (client == NULL) {
+        debug_printf("ERROR: process_memory_request: could not identify client\n");
+        return NULL;
+    }
+
+    size_t req_size = (size_t) msg->words[1];
     req_size = ROUND_UP(req_size, BASE_PAGE_SIZE);
     if (req_size == 0) {
         // Waht?!
         req_size = BASE_PAGE_SIZE;
     }
-    if (req_size + clients[conn].ram >= MAX_CLIENT_RAM) {
+    if (req_size + client->ram >= MAX_CLIENT_RAM) {
         // Limit to 64 MB.
-        req_size = MAX_CLIENT_RAM - clients[conn].ram;
+        req_size = MAX_CLIENT_RAM - client->ram;
     }
 
-    // Allocate frame.
-
-    errval_t err = ram_alloc(remote_cap, req_size);//frame_alloc(remote_cap, req_size, &ret_size);
-    clients[conn].ram += req_size;
+    // Allocate RAM.
+    struct capref mem_cap;
+    errval_t err = ram_alloc(&mem_cap, req_size);//frame_alloc(mem_cap, req_size, &ret_size);
+    client->ram += req_size;
 
     // Response args.
+    size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(sizeof(errval_t), 4)
+            + ROUND_UP(sizeof(struct capref), 4)
+            + sizeof(size_t);
+    void* args = malloc(args_size);
+    void *return_args = args;
+    
     // 1. Channel to send down.
-    // 2. Error code from frame_alloc.
-    // 3. Cap for memory.
-    // 4. Returned size.
-    uintptr_t* args = (uintptr_t*) malloc(4 * sizeof(uintptr_t));
-    args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[conn].lc;
+    *((struct lmp_chan*) args) = client->lc;
+    
+    // 2. Error code fromm ram_alloc.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    *((errval_t*) args) = err;
 
-    args[1] = (uintptr_t) ((errval_t*) malloc(sizeof(errval_t)));
-    *((errval_t*) args[1]) = err;
+    // 3. Cap for newly allocated RAM.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
+    *((struct capref*) args) = mem_cap;
 
-    args[2] = (uintptr_t) ((struct capref*) malloc(sizeof(struct capref)));
-    *((struct capref*) args[2]) = *remote_cap;
+    // 4. Size returned by ram_alloc.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct capref), 4);
+    *((size_t*) args) = req_size;
 
-    args[3] = (uintptr_t) ((size_t*) malloc(sizeof(size_t)));
-    *((size_t*) args[3]) = req_size;
-
-    return args;
+    return return_args;
 }
 
-uintptr_t* process_number_request(struct lmp_recv_msg* msg)
+void* process_number_request(struct lmp_recv_msg* msg,
+        struct capref* remote_cap)
 {
-    uint32_t conn = msg->words[1];
-    // Fill in response args.
-    uintptr_t* args = (uintptr_t*) malloc(sizeof(uintptr_t));
-    // First arg is the channel to send the response down.
-    args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[conn].lc;
-
     // Print what we got.
-    uint32_t number = msg->words[2];
-    debug_printf("Client ID %u sent number %u\n", conn, number);
+    debug_printf("Server received number %u\n", (uint32_t) msg->words[1]);
 
-    return args;
-}
-
-uintptr_t* process_putchar_request(struct lmp_recv_msg* msg)
-{
-    // Put character.
-    sys_print((char*) &msg->words[2], 1);
-
-    uint32_t conn = msg->words[1];
-    // Fill in response args.
-    uintptr_t* args = (uintptr_t*) malloc(sizeof(sizeof(uintptr_t)));
-    // First arg is the channel to send the response down.
-    args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[conn].lc;
-
-    return args;
-}
-
-uintptr_t* process_string_request(struct lmp_recv_msg* msg)
-{
-    uint32_t conn = msg->words[1];
-    uint32_t remaining = msg->words[2];
-
-    if (clients[conn].str_buf == NULL) {
-        clients[conn].str_buf = (char*) malloc(remaining * sizeof(char));
-        clients[conn].str_buf_idx = 0;
+    // Identify client.
+    struct client_state* client = identify_client(remote_cap);
+    if (client == NULL) {
+        debug_printf("ERROR: process_number_request: could not idetify client");
+        return NULL;
     }
 
-    size_t stop = remaining < 24 ? remaining : 24;
+    // Return channel for response handler.
+    return (void*) &client->lc;
+}
+
+void* process_putchar_request(struct lmp_recv_msg* msg,
+        struct capref* remote_cap)
+{
+    // Put character.
+    sys_print((char*) &msg->words[1], 1);
+
+    // Identify client.
+    struct client_state* client = identify_client(remote_cap);
+    if (client == NULL) {
+        debug_printf("ERROR: process_putchar_request: could not idetify client");
+        return NULL;
+    }
+
+    // Return chanel for response handler.
+    return (void*) &client->lc;
+}
+
+void* process_string_request(struct lmp_recv_msg* msg,
+        struct capref* remote_cap)
+{
+    uint32_t remaining = msg->words[1];
+
+    struct client_state* client = clients;
+    while (client != NULL) {
+        struct capability ret;
+        debug_cap_identify(*remote_cap, &ret);
+        if (client->remote_ep.listener == ret.u.endpoint.listener
+                && client->remote_ep.epoffset == ret.u.endpoint.epoffset) {
+            break;
+        }
+        client = client->next;
+    }
+    if (client == NULL) {
+        debug_printf("main.c: process_string_request: could not find client\n");
+        return NULL;
+    }
+
+    if (client->str_buf == NULL) {
+        client->str_buf = (char*) malloc(remaining * sizeof(char));
+        client->str_buf_idx = 0;
+    }
+
+    size_t stop = remaining < 28 ? remaining : 28;
     for (size_t i = 0; i < stop; ++i) {
-        uint32_t word = msg->words[3 + i / 4];
-        clients[conn].str_buf[clients[conn].str_buf_idx++] =
+        uint32_t word = msg->words[2 + i / 4];
+        client->str_buf[client->str_buf_idx++] =
                 (char) (word >> (8 * (i % 4)));
     }
 
     remaining -= stop;
     if (remaining == 0) {
         // Print and reset.
-        sys_print(clients[conn].str_buf, clients[conn].str_buf_idx);
-        clients[conn].str_buf_idx = 0;
-        free(clients[conn].str_buf);
-        clients[conn].str_buf = NULL;
+        sys_print(client->str_buf, client->str_buf_idx);
+        client->str_buf_idx = 0;
+        free(clients->str_buf);
+        client->str_buf = NULL;
     }
 
-    // Fill in response args.
-    uintptr_t* args = (uintptr_t*) malloc(sizeof(sizeof(uintptr_t)));
-    // First arg is the channel to send the response down.
-    args[0] = (uintptr_t) ((struct lmp_chan*) malloc(sizeof(struct lmp_chan)));
-    *((struct lmp_chan*) args[0]) = clients[conn].lc;
-
-    return args;
+    // Return response args.
+    return (void*) &client->lc;
 }
 
 errval_t recv_handler(void* arg)
@@ -211,22 +264,19 @@ errval_t recv_handler(void* arg)
     // printf("msg buflen %d\n", msg.buf.buflen);
     struct capref cap;
     errval_t err = lmp_chan_recv(lc, &msg, &cap);
-    
+
     // Reregister.
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
     lmp_chan_register_recv(lc, get_default_waitset(),
             MKCLOSURE((void *)recv_handler, arg));
 
-    // debug_printf("main.c: got message of size %u\n", msg.buf.msglen);
     if (msg.buf.msglen > 0) {
         void* response;
-        // debug_printf("init.c: msg buflen %zu\n", msg.buf.msglen);
-        // debug_printf("init.c: msg->words[0] = %d\n", msg.words[0]);
-        uintptr_t* response_args;
+        void* response_args;
         switch (msg.words[0]) {
             case AOS_RPC_HANDSHAKE:
                 response = (void*) send_handshake;
-                response_args = process_handshake_request(lc, &cap);
+                response_args = process_handshake_request(&cap);
                 break;
             case AOS_RPC_MEMORY:
                 response = (void*) send_memory;
@@ -234,61 +284,57 @@ errval_t recv_handler(void* arg)
                 break;
             case AOS_RPC_NUMBER:
                 response = (void*) send_simple_ok;
-                response_args = process_number_request(&msg);
+                response_args = process_number_request(&msg, &cap);
                 break;
             case AOS_RPC_PUTCHAR:
                 response = (void*) send_simple_ok;
-                response_args = process_putchar_request(&msg);
+                response_args = process_putchar_request(&msg, &cap);
                 break;
             case AOS_RPC_STRING:
                 response = (void*) send_simple_ok;
-                response_args = process_string_request(&msg);
+                response_args = process_string_request(&msg, &cap);
                 break;
             default:
                 return 1;  // TODO: More meaning plz
         }
 
+        struct lmp_chan* out = (struct lmp_chan*) response_args;
         CHECK("lmp_chan_register_send parent",
-                lmp_chan_register_send(lc, get_default_waitset(),
+                lmp_chan_register_send(out, get_default_waitset(),
                         MKCLOSURE(response, response_args)));  
     }
 
     return err;
 }
 
-errval_t send_handshake(void* void_args)
+errval_t send_handshake(void* args)
 {
-    uintptr_t* args = (uintptr_t*) void_args;
-
     // 1. Get channel to send down.
-    struct lmp_chan* lc = (struct lmp_chan*) args[0];
-    // 2. Get Client ID.
-    uint32_t* client_id = (uint32_t*) args[1];
+    struct lmp_chan* lc = (struct lmp_chan*) args;
 
-    // 3. Send response.
+    // 2. Send response.
     CHECK("lmp_chan_send handshake",
-            lmp_chan_send2(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK, *client_id));
-
-    // 4. Free args.
-    free(client_id);
-    free(lc);
-    free(args);
+            lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
 
     return SYS_ERR_OK;
 }
 
-errval_t send_memory(void* void_args)
+errval_t send_memory(void* args)
 {
-    uintptr_t* args = (uintptr_t*) void_args;
-    
     // 1. Get channel to send down.
-    struct lmp_chan* lc = (struct lmp_chan*) args[0];
+    struct lmp_chan* lc = (struct lmp_chan*) args;
+
     // 2. Get error code.
-    errval_t* err = (errval_t*) args[1];
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    errval_t* err = (errval_t*) args;
+
     // 3. Get cap for memory.
-    struct capref* retcap = (struct capref*) args[2];
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
+    struct capref* retcap = (struct capref*) args;
+
     // 4. Get returned size.
-    size_t* size = (size_t*) args[3];
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct capref), 4);
+    size_t* size = (size_t*) args;
 
     // 5. Generate response code.
     size_t code = err_is_fail(*err) ? AOS_RPC_FAILED : AOS_RPC_OK;
@@ -299,29 +345,19 @@ errval_t send_memory(void* void_args)
                     *size));
 
     // 7 Free args.
-    free(size);
-    free(retcap);
-    free(err);
-    free(lc);
     free(args);
 
     return SYS_ERR_OK;
 }
 
-errval_t send_simple_ok(void* void_args)
+errval_t send_simple_ok(void* args)
 {
-    uintptr_t* args = (uintptr_t*) void_args;
-
     // 1. Get channel to send down.
-    struct lmp_chan* lc = (struct lmp_chan*) args[0];
+    struct lmp_chan* lc = (struct lmp_chan*) args;
 
     // 2. Send response.
     CHECK("lmp_chan_send putchar",
             lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
-
-    // 3. Free args.
-    free(lc);
-    free(args);
 
     return SYS_ERR_OK;
 }
@@ -421,9 +457,8 @@ int main(int argc, char *argv[])
     // *(a+1) = 'b';
     // printf("Value of char after resize %c\n", *(a+1));
     // spawn a few helloz
-    // spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    // spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-
+    spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+    spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
     spawn_load_by_name("memeater", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
 
     debug_printf("Message handler loop\n");
