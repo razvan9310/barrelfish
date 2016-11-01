@@ -26,7 +26,6 @@
 #define AOS_RPC_STRING 1 << 11    // ID for send string requests.
 
 struct aos_rpc {
-	uint32_t client_id;
     struct lmp_chan lc;
     struct waitset* ws;
 };
