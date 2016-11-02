@@ -13,10 +13,12 @@
  * ETH Zurich D-INFK, Universitaetstr. 6, CH-8092 Zurich. Attn: Systems Group.
  */
 
+#include <stdio.h>
+
 #include <aos/aos.h>
 #include <aos/core_state.h>
 #include <aos/morecore.h>
-#include <stdio.h>
+#include <mm/mm.h>
 
 typedef void *(*morecore_alloc_func_t)(size_t bytes, size_t *retbytes);
 extern morecore_alloc_func_t sys_morecore_alloc;
@@ -26,7 +28,7 @@ extern morecore_free_func_t sys_morecore_free;
 
 // this define makes morecore use an implementation that just has a static
 // 16MB heap.
-#define USE_STATIC_HEAP
+//#define USE_STATIC_HEAP
 
 
 #ifdef USE_STATIC_HEAP
@@ -94,18 +96,38 @@ errval_t morecore_init(void)
  */
 static void *morecore_alloc(size_t bytes, size_t *retbytes)
 {
-    USER_PANIC("NYI");
-    return NULL;
+    struct morecore_state *state = get_morecore_state();
+
+    void* buf;
+    size_t retsize;
+    errval_t err = paging_region_map(&state->region, bytes, &buf, &retsize);
+    if (err_is_fail(err)) {
+        debug_printf("morecore_alloc: error in paging_region_map: %s\n",
+                err_getstring(err));
+        return NULL;
+    }
+
+    return buf;
 }
 
 static void morecore_free(void *base, size_t bytes)
 {
-    USER_PANIC("NYI");
+    // TODO(razvan): Implement once paging_region_unmap is working.
+    return;
 }
 
 errval_t morecore_init(void)
 {
-    USER_PANIC("NYI");
+    struct morecore_state *state = get_morecore_state();
+
+    thread_mutex_init(&state->mutex);
+
+    CHECK("morecore_init#paging_region_init",
+            paging_region_init(get_current_paging_state(),
+            &state->region, 1 << 26));  // 64 MB for general-purpose malloc's.
+
+    sys_morecore_alloc = morecore_alloc;
+    sys_morecore_free = morecore_free;
     return SYS_ERR_OK;
 }
 

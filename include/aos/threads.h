@@ -29,6 +29,9 @@ __BEGIN_DECLS
 
 typedef int (*thread_func_t)(void *);
 
+#define THREAD_EXIT_UNHANDLED_EXCEPTION 1336
+#define THREAD_EXIT_PAGEFAULT 1337
+
 /// Default size of a thread's stack
 #define THREADS_DEFAULT_STACK_BYTES     (64 * 1024)
 

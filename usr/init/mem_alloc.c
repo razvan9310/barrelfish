@@ -99,6 +99,11 @@ errval_t initialize_ram_alloc(void)
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_RAM_ALLOC_SET);
     }
+    // Also intialize the generic RAM free function to ours.
+    err = ram_free_set(aos_ram_free);
+    if (err_is_fail(err)) {
+        return err_push(err, LIB_ERR_RAM_ALLOC_SET);
+    }
 
     /* Testing. */
     // int i;
