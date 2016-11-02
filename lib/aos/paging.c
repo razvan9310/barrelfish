@@ -23,6 +23,21 @@
 
 static struct paging_state current;
 
+static char heap[PAGING_HEAP_SIZE] = { 0 };
+static char* currp = heap;
+static char* endp = heap + PAGING_HEAP_SIZE;
+
+static inline char* paging_heap_malloc(size_t size)
+{
+    size = ROUND_UP(size, 4);
+    char* buf = currp;
+    currp += size;
+    if (currp > endp) {
+        return NULL;
+    }
+    return buf;
+}
+
 /**
  * \brief Helper function that allocates a slot and
  *        creates a ARM l2 page table capability
@@ -58,7 +73,10 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr,
     // Slab allocator. 64 nodes should be enough, as we'll have the Memory
     // Manager up and running before we really start mapping vaddresses.
     slab_init(&st->slabs, sizeof(struct paging_node), slab_default_refill);
-    char* paging_buf = (char*) malloc(64 * sizeof(struct paging_node));
+    char* paging_buf = paging_heap_malloc(64 * sizeof(struct paging_node));
+    if (paging_buf == NULL) {
+        return LIB_ERR_VSPACE_INIT;
+    }
     slab_grow(&st->slabs, paging_buf, 64 * sizeof(struct paging_node));
 
     // We don't have any L2 pagetables yet, thus make sure the flags are unset.
@@ -156,25 +174,6 @@ errval_t paging_region_init(struct paging_state *st, struct paging_region *pr, s
 errval_t paging_region_map(struct paging_region *pr, size_t req_size,
                            void **retbuf, size_t *ret_size)
 {
-    if (!pr->mapped) {
-        // Need to map some phys mem here before we can return a pointer.
-        struct capref frame;
-        size_t retsize;
-        errval_t err = frame_alloc(&frame, req_size, &retsize);
-        if (err_is_fail(err)) {
-            return err_push(err, LIB_ERR_VSPACE_MMU_AWARE_MAP);
-        }
-
-        err = paging_map_fixed_attr(pr->st, pr->base_addr, frame, retsize,
-                VREGION_FLAGS_READ_WRITE);
-        if (err_is_fail(err)) {
-            return err_push(err, LIB_ERR_VSPACE_MMU_AWARE_MAP);
-        }
-
-        pr->region_size = retsize;
-        pr->mapped = true;
-    }
-
     lvaddr_t end_addr = pr->base_addr + pr->region_size;
     ssize_t rem = end_addr - pr->current_addr;
     if (rem > req_size) {
@@ -203,12 +202,13 @@ errval_t paging_region_map(struct paging_region *pr, size_t req_size,
 errval_t paging_region_unmap(struct paging_region *pr, lvaddr_t base, size_t bytes)
 {
     // TIP: you will need to keep track of possible holes in the region
+    // TODO(razvan): implement while paging_unmap is working.
     return SYS_ERR_OK;
 }
 
-bool should_refill_slabs(struct paging_state *st)
+bool paging_should_refill_slabs(struct paging_state *st)
 {
-    return slab_freecount(&st->slabs) < 6 && !st->slab_refilling;
+    return slab_freecount(&st->slabs) < 6;
 }
 
 /**
@@ -249,6 +249,11 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes)
     return LIB_ERR_VREGION_NOT_FOUND;
 }
 
+errval_t paging_refill_slabs(struct paging_state* st)
+{
+    return slab_refill_no_pagefault(&st->slabs, NULL_CAP, BASE_PAGE_SIZE);
+}
+
 /**
  * \brief map a user provided frame, and return the VA of the mapped
  *        frame in `buf`.
@@ -257,20 +262,15 @@ errval_t paging_map_frame_attr(struct paging_state *st, void **buf,
                                size_t bytes, struct capref frame,
                                int flags, void *arg1, void *arg2)
 {
-    if (should_refill_slabs(st)) {
-        st->slab_refilling = true;
-        errval_t err = st->slabs.refill_func(&st->slabs);
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "slab refill_func failed");
-            return LIB_ERR_VREGION_MAP;
-        }
-        st->slab_refilling = false;
+    if (paging_should_refill_slabs(st)) {
+        CHECK("paging_map_frame_attr: paging_refill_slabs",
+                paging_refill_slabs(st));
     }
     errval_t err = paging_alloc(st, buf, bytes);
     if (err_is_fail(err)) {
         return err;
     }
-    return paging_map_fixed_attr(st, (lvaddr_t)(*buf), frame, bytes, flags);
+    return paging_map_fixed_attr(st, (lvaddr_t) (*buf), frame, bytes, flags);
 }
 
 errval_t
@@ -280,9 +280,25 @@ slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref frame, size
     if (minbytes == 0) {
         minbytes = BASE_PAGE_SIZE;
     }
-    void* buf = malloc(minbytes);
+    char* buf = paging_heap_malloc(minbytes);
+    if (buf == NULL) {
+        return LIB_ERR_SLAB_REFILL;
+    }
     slab_grow(slabs, buf, minbytes);
     return SYS_ERR_OK;
+}
+
+// Whether the vregion given by vaddr and size is of type NodeType_Allocated.
+bool is_vregion_allocated(struct paging_state* st, lvaddr_t vaddr)
+{
+    struct paging_node* node = st->head;
+    while (node != NULL) {
+        if (node->base <= vaddr && node->base + node->size > vaddr) {
+            return node->type == NodeType_Allocated;
+        }
+        node = node->next;
+    }
+    return false;
 }
 
 /**
@@ -299,7 +315,7 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
     while (bytes > 0) {
         if (node == NULL) {
             // Couldn't find node, err out.
-            return LIB_ERR_VREGION_MAP;
+            return LIB_ERR_VREGION_MAP_FIXED;
         }
         if (node->type == NodeType_Allocated) {
             // Skip node if allocated.
@@ -312,14 +328,15 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
             continue;
         }
 
-        /* Step 2: Mark node as allocated & split t. */
+        /* Step 2: Mark node as allocated & split it. */
         // TODO: If further steps fail and this function returns without success
         //       we should free the node & merge it back.
+        enum nodetype old_type = node->type;
         node->type = NodeType_Allocated;
         if (node->base + node->size > vaddr + bytes) {
             // Need new (free) node to the right;
             struct paging_node *right = (struct paging_node*) slab_alloc(&st->slabs);
-            right->type = NodeType_Free;
+            right->type = old_type;
             right->base = vaddr + bytes;
             right->size = node->size - (vaddr - node->base) - bytes;
             right->next = node->next;
@@ -334,7 +351,7 @@ errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
         if (vaddr > node->base) {
             // Need new (free) node to the left.
             struct paging_node *left = (struct paging_node*) slab_alloc(&st->slabs);
-            left->type = NodeType_Free;
+            left->type = old_type;
             left->base = node->base;
             left->size = vaddr - node->base;
             left->next = node;
