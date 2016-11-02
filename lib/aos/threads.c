@@ -1124,6 +1124,8 @@ static int bootstrap_thread(struct spawn_domain_params *params)
     }
     slab_init(&thread_slabs, blocksize, refill_thread_slabs);
 
+    // XXX: disable using real threads for m3, as paging_region needs
+    // self-paging, -SG,2016-10-25.
     if (init_domain_global || true) {
         // run main() on this thread, since we can't allocate
         if (tls_block_total_len > 0) {
