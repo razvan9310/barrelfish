@@ -326,7 +326,7 @@ errval_t mm_free(struct mm *mm, struct capref cap, genpaddr_t base, gensize_t si
                 node_rm(found->prev);
             }
             // 2.2. maybe merge adjacent free node after
-            if (found->next->type == NodeType_Free && found->next->cap.base == found->cap.base) {
+            if (found->next != NULL && found->next->type == NodeType_Free && found->next->cap.base == found->cap.base) {
                 // debug_printf("*** mm_free: merging with next\n");
                 assert(found->base + found->size == found->next->base);
                 freeme[1] = found->next;
