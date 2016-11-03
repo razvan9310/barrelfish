@@ -24,6 +24,7 @@
 typedef int paging_flags_t;
 
 #define VADDR_OFFSET ((lvaddr_t)1UL*1024*1024*1024) // 1GB
+#define VADDR_RESERVED ((lvaddr_t) 3UL * 1024 * 1024 * 1024) // 3GB
 
 #define PAGING_SLAB_BUFSIZE 12
 
@@ -45,6 +46,8 @@ typedef int paging_flags_t;
     (VREGION_FLAGS_READ | VREGION_FLAGS_WRITE | VREGION_FLAGS_MPB)
 
 #define L1_PAGETABLE_ENTRIES 4096
+
+#define PAGING_HEAP_SIZE (1<<24)
 
 enum nodetype {
     NodeType_Free,     ///< This vregion is free (white).
@@ -79,8 +82,6 @@ struct paging_state {
     struct paging_node* head;
     // Slabs for paging_node's.
     struct slab_allocator slabs;
-    // Whether slabs are being refilled.
-    bool slab_refilling;
 
     // Cap to the L1 pagetable of the owner process.
     struct capref l1_pagetable;
@@ -126,7 +127,8 @@ errval_t paging_region_map(struct paging_region *pr, size_t req_size,
  */
 errval_t paging_region_unmap(struct paging_region *pr, lvaddr_t base, size_t bytes);
 
-bool should_refill_slabs(struct paging_state *st);
+bool paging_should_refill_slabs(struct paging_state *st);
+errval_t paging_refill_slabs(struct paging_state* st);
 
 /**
  * \brief Find a bit of free virtual address space that is large enough to
@@ -141,6 +143,9 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes);
 errval_t paging_map_frame_attr(struct paging_state *st, void **buf,
                                size_t bytes, struct capref frame,
                                int flags, void *arg1, void *arg2);
+
+// Whether the paging_node containing vaddr is of type NodeType_Allocated.
+bool is_vregion_allocated(struct paging_state* st, lvaddr_t vaddr);
 
 /// Map user provided frame at user provided VA with given flags.
 errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,

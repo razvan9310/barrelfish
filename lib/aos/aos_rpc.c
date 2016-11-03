@@ -94,19 +94,14 @@ errval_t aos_rpc_send_number(struct aos_rpc *chan, uintptr_t val)
 {
     // TODO: implement functionality to send a number ofer the channel
     // given channel and wait until the ack gets returned.
-    uintptr_t* args = (uintptr_t*) malloc(2 * sizeof(uintptr_t));
-    args[0] = (uintptr_t) ((struct aos_rpc*) malloc(sizeof(struct aos_rpc)));
-    *((struct aos_rpc*) args[0]) = *chan;
-    args[1] = (uintptr_t) ((uintptr_t*) malloc(sizeof(uintptr_t)));
-    *((uintptr_t*) args[1]) = val;
+    uintptr_t args[2];
+    args[0] = (uintptr_t) chan;
+    args[1] = (uintptr_t) &val;
 
     CHECK("aos_rpc.c#aos_rpc_send_number: aos_rpc_send_and_receive",
             aos_rpc_send_and_receive(args, aos_rpc_send_number_send_handler,
                     aos_rpc_send_number_recv_handler));
 
-    free((uintptr_t*) args[1]);
-    free((struct aos_rpc*) args[0]);
-    free(args);
     return SYS_ERR_OK;
 }
 
@@ -317,16 +312,11 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t request_bytes,
     // 2. request_bytes
     // 3. retcap
     // 4. ret_bytes
-    uintptr_t* args = (uintptr_t*) malloc(4 * sizeof(uintptr_t));
-    args[0] = (uintptr_t) ((struct aos_rpc*) malloc(sizeof(struct aos_rpc)));
-    *((struct aos_rpc*) args[0]) = *chan;
-
-    args[1] = (uintptr_t) ((size_t*) malloc(sizeof(size_t)));
-    *((size_t*) args[1]) = request_bytes;
-
-    // Unused -- will be filled in by RPC.
-    args[2] = (uintptr_t) ((struct capref*) malloc(sizeof(struct capref)));
-    args[3] = (uintptr_t) ((size_t*) malloc(sizeof(size_t)));
+    uintptr_t args[4];
+    args[0] = (uintptr_t) chan;
+    args[1] = (uintptr_t) &request_bytes;
+    args[2] = (uintptr_t) retcap;
+    args[3] = (uintptr_t) ret_bytes;
 
     // Allocate recv slot.
     CHECK("aos_rpc.c#aos_rpc_get_ram_cap: lmp_chan_alloc_recv_slot",
@@ -337,16 +327,6 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t request_bytes,
     CHECK("aos_rpc.c#aos_rpc_get_ram_cap: aos_rpc_send_and_receive",
             aos_rpc_send_and_receive(args, aos_rpc_ram_send_handler,
                     aos_rpc_ram_recv_handler));
-
-    *retcap = *((struct capref*) args[2]);
-    *ret_bytes = *((size_t*) args[3]);
-
-    // Free args.
-    free((size_t*) args[3]);
-    free((struct capref*) args[2]);
-    free((size_t*) args[1]);
-    free((struct aos_rpc*) args[0]);
-    free(args);
 
     return SYS_ERR_OK;
 }
@@ -361,23 +341,13 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *chan, char *retc)
 
 errval_t aos_rpc_serial_putchar(struct aos_rpc *chan, char c)
 {
-    // TODO implement functionality to send a character to the
-    // serial port.
-
-    uintptr_t* args = (uintptr_t*) malloc(2 * sizeof(uintptr_t));;
-    args[0] = (uintptr_t) ((struct aos_rpc*) malloc(sizeof(struct aos_rpc)));
-    *((struct aos_rpc*) args[0]) = *chan;
-
-    args[1] = (uintptr_t) ((char*) malloc(sizeof(char)));
-    *((char*) args[1]) = c;
+    uintptr_t args[2];
+    args[0] = (uintptr_t) chan;
+    args[1] = (uintptr_t) &c;
 
     CHECK("aos_rpc.c#aos_rpc_serial_putchar: aos_rpc_send_and_receive",
            aos_rpc_send_and_receive(args, aos_rpc_putchar_send_handler,
                    aos_rpc_putchar_recv_handler));
-
-    free((char*) args[1]);
-    free((struct aos_rpc*) args[0]);
-    free(args);
 
     return SYS_ERR_OK;
 }
@@ -800,19 +770,12 @@ errval_t aos_rpc_init(struct aos_rpc *rpc, struct waitset* ws)
     debug_printf("aos_rpc_init: LOCAL CAP HAS SLOT %d\n", rpc->lc.local_cap.slot);
 
     // 2. Marshal args.
-    uintptr_t* args = (uintptr_t*) malloc(sizeof(uintptr_t));
-    args[0] = (uintptr_t) rpc;
-    args[0] = (uintptr_t) ((struct aos_rpc*) malloc(sizeof(struct aos_rpc)));
-    *((struct aos_rpc*) args[0]) = *rpc;
+    uintptr_t args = (uintptr_t) rpc;
 
     // 2. Send handshake request to init and wait for ACK.
     CHECK("aos_rpc.c#aos_rpc_init: aos_rpc_send_and_receive",
-            aos_rpc_send_and_receive(args, aos_rpc_handshake_send_handler,
+            aos_rpc_send_and_receive(&args, aos_rpc_handshake_send_handler,
                     aos_rpc_handshake_recv_handler));
-
-    // 3. Free args.
-    free((struct aos_rpc*) args[0]);
-    free(args);
 
     // By now we've successfully established the underlying LMP channel for RPC.
     return SYS_ERR_OK;

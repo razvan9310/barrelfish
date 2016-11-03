@@ -25,12 +25,15 @@ __BEGIN_DECLS
 struct capref;
 
 typedef errval_t (* ram_alloc_func_t)(struct capref *ret, size_t size, size_t alignment);
+typedef errval_t (* ram_free_func_t)(struct capref cap, size_t size);
 
 errval_t ram_alloc_fixed(struct capref *ret, size_t size, size_t alignment);
 errval_t ram_alloc_aligned(struct capref *ret, size_t size, size_t alignment);
 errval_t ram_alloc(struct capref *retcap, size_t size);
+errval_t ram_free (struct capref cap, size_t size);
 errval_t ram_available(genpaddr_t *available, genpaddr_t *total);
 errval_t ram_alloc_set(ram_alloc_func_t local_allocator);
+errval_t ram_free_set(ram_free_func_t local_free_func);
 void ram_set_affinity(uint64_t minbase, uint64_t maxlimit);
 void ram_get_affinity(uint64_t *minbase, uint64_t *maxlimit);
 void ram_alloc_init(void);
