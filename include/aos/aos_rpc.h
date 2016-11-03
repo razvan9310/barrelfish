@@ -19,15 +19,20 @@
 
 #define AOS_RPC_OK 0              // General-purpose OK message.
 #define AOS_RPC_FAILED 1          // RPC failure.
-#define AOS_RPC_HANDSHAKE 1 << 2  // Message passed at handshake time.
-#define AOS_RPC_MEMORY 1 << 3  	  // ID for memory requests.
-#define AOS_RPC_NUMBER 1 << 5     // ID for send number requests.
-#define AOS_RPC_PUTCHAR 1 << 7    // ID for putchar requests.
-#define AOS_RPC_STRING 1 << 11    // ID for send string requests.
+#define AOS_RPC_HANDSHAKE  1 << 2  // Message passed at handshake time.
+#define AOS_RPC_MEMORY     1 << 3  // ID for memory requests.
+#define AOS_RPC_NUMBER     1 << 5  // ID for send number requests.
+#define AOS_RPC_PUTCHAR    1 << 7  // ID for putchar requests.
+#define AOS_RPC_STRING     1 << 11 // ID for send string requests.
+#define AOS_RPC_SPAWN      1 << 13 // ID for process spawn requests.
+#define AOS_RPC_GET_PNAME  1 << 15 // ID for get process name requests.
+#define AOS_RPC_GET_PLIST  1 << 19 // ID for get process name requests.
 
 struct aos_rpc {
     struct lmp_chan lc;
     struct waitset* ws;
+    char* buffer;
+    int offset;
 };
 
 errval_t aos_rpc_putchar_send_handler(void* void_args);
@@ -36,6 +41,14 @@ errval_t aos_rpc_send_number_send_handler(void* void_args);
 errval_t aos_rpc_send_number_recv_handler(void* void_args);
 errval_t aos_rpc_send_string_send_handler(void* void_args);
 errval_t aos_rpc_send_string_recv_handler(void* void_args);
+errval_t aos_rpc_process_spawn_send_handler(void* void_args);
+errval_t aos_rpc_process_spawn_recv_handler(void* void_args);
+errval_t aos_rpc_process_get_name_send_handler(void* void_args);
+errval_t aos_rpc_process_get_name_recv_handler(void* void_args);
+errval_t aos_rpc_process_get_process_list_send_handler(void* void_args);
+errval_t aos_rpc_process_get_process_list_recv_handler(void* void_args);
+
+
 
 /**
  * \brief send a number over the given channel
