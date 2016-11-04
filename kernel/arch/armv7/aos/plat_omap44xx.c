@@ -67,8 +67,14 @@ char
 serial_getchar(unsigned port) {
     /* XXX - You only need to implement this if you're going for the extension
      * component. */
-
-    panic("Unimplemented.\n");
+    volatile char *uart_rhr = (char *) 0x48020000;
+    volatile int *uart_3_lsr = (int *) 0x48020014;
+    int RX_FIFO_E = 1;
+    
+    while(!(*uart_3_lsr & RX_FIFO_E));
+    
+    return *uart_rhr;
+    // panic("Unimplemented.\n");
 }
 
 /*** LED flashing ***/

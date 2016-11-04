@@ -126,6 +126,14 @@ static errval_t test_basic_rpc(void)
         return err;
     }
 
+    // char *c = (char *)malloc(sizeof(char));
+    // debug_printf("RPC: getting small variable string...\n");
+    // err =  aos_rpc_serial_getchar(&init_rpc, c);
+    // if (err_is_fail(err)) {
+    //     DEBUG_ERR(err, "could not send a string\n");
+    //     return err;
+    // }
+
     debug_printf("RPC: sending large string...\n");
     err =  aos_rpc_send_string(&init_rpc, str);
     if (err_is_fail(err)) {
