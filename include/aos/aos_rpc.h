@@ -27,12 +27,16 @@
 #define AOS_RPC_SPAWN      1 << 13 // ID for process spawn requests.
 #define AOS_RPC_GET_PNAME  1 << 15 // ID for get process name requests.
 #define AOS_RPC_GET_PLIST  1 << 19 // ID for get process name requests.
+#define AOS_RPC_GETCHAR    1 << 21    // ID for getchar requests.
+
 
 struct aos_rpc {
     struct lmp_chan lc;
     struct waitset* ws;
     char* buffer;
     int offset;
+    domainid_t* ps_list;
+    int ps_offset;
 };
 
 errval_t aos_rpc_putchar_send_handler(void* void_args);
@@ -47,8 +51,8 @@ errval_t aos_rpc_process_get_name_send_handler(void* void_args);
 errval_t aos_rpc_process_get_name_recv_handler(void* void_args);
 errval_t aos_rpc_process_get_process_list_send_handler(void* void_args);
 errval_t aos_rpc_process_get_process_list_recv_handler(void* void_args);
-
-
+errval_t aos_rpc_serial_getchar_send_handler(void* void_args);
+errval_t aos_rpc_serial_getchar_recv_handler(void* void_args);
 
 /**
  * \brief send a number over the given channel

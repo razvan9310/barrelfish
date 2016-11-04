@@ -53,6 +53,7 @@ struct system_ps {
     struct spawninfo process;
     domainid_t pid;
     char* name;
+    int curr_size;
     // Doubly-linked list.
     struct system_ps* next;
     struct system_ps* prev;
@@ -78,9 +79,12 @@ void* process_get_process_name_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap);
 void* process_get_process_list_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap);
+void* process_getchar_request(struct lmp_recv_msg* msg,
+        struct capref* remote_cap);
 
 errval_t send_handshake(void* args);
 errval_t send_memory(void* args);
+errval_t send_serial_getchar(void* args);
 errval_t send_simple_ok(void* args);
 errval_t send_pid(void* args);
 errval_t send_process_name(void* args);
@@ -210,8 +214,10 @@ void* process_handshake_request(struct capref* remote_cap)
         struct system_ps* new_ps = (struct system_ps*) malloc(sizeof(struct system_ps));
         if (ps == NULL) {
             new_ps->next = new_ps->prev = NULL;
+            new_ps->curr_size = 1;
         } else {
             ps->prev = new_ps;
+            new_ps->curr_size = ps->curr_size+1;
             new_ps->next = ps;
             new_ps->prev = NULL;
         }
@@ -377,6 +383,40 @@ void* process_putchar_request(struct lmp_recv_msg* msg,
     return (void*) &client->lc;
 }
 
+void* process_getchar_request(struct lmp_recv_msg* msg,
+            struct capref* remote_cap)
+{
+    // Identify Client
+    struct client_state* client = identify_client(remote_cap);
+    if (client == NULL) {
+        debug_printf("ERROR: process_putchar_request: could not idetify client\n");
+        return NULL;
+    }
+
+    // Get character.
+    while(1) {
+        sys_getchar((char*) &msg->words[2]);
+        if(msg->words[2]) break;
+    }
+
+    debug_printf("main.c: process_getchar_request value of input char %c\n", msg->words[2]);
+
+    // Response args.
+    size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(sizeof(char), 4);
+    void* args = malloc(args_size);
+    void *return_args = args;
+    
+    // 1. Channel to send down.
+    *((struct lmp_chan*) args) = client->lc;
+
+    // 2. Character returned by sys_getchar
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(char), 4);
+    *((char*) args) = msg->words[2];
+
+    return return_args;
+}
+
 void* process_string_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap)
 {
@@ -425,13 +465,13 @@ void* process_string_request(struct lmp_recv_msg* msg,
 void* process_get_process_name_request(struct lmp_recv_msg* msg,
         struct capref* remote_cap)
 {
-    debug_printf("Server received number %u\n", (uint32_t) msg->words[1]);
+    debug_printf("Server received pid %u\n", (uint32_t) msg->words[1]);
     domainid_t pid = (domainid_t) msg->words[1];
 
     // Identify client.
     struct client_state* client = identify_client(remote_cap);
     if (client == NULL) {
-        debug_printf("ERROR: process_number_request: could not idetify client");
+        debug_printf("ERROR: process_pid_request: could not idetify client");
         return NULL;
     }
 
@@ -439,7 +479,6 @@ void* process_get_process_name_request(struct lmp_recv_msg* msg,
     struct system_ps* aux;
     char* process_name;
     size_t length;
-    debug_printf("Before iterating over list\n");
 
     for (aux = ps; aux != NULL; aux = aux->next) {
         if (aux->pid == pid) {
@@ -471,6 +510,50 @@ void* process_get_process_name_request(struct lmp_recv_msg* msg,
     args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
     strncpy((char *)args, process_name, length);
 
+    return return_args;
+}
+
+void* process_get_process_list_request(struct lmp_recv_msg* msg,
+        struct capref* remote_cap)
+{
+    //TODO
+    //parse request
+    // Identify client.
+    debug_printf("main.c process_get_process_list_request %u\n", (uint32_t) msg->words[1]);
+
+    struct client_state* client = identify_client(remote_cap);
+    if (client == NULL) {
+        debug_printf("ERROR: process_get_list_request: could not idetify client");
+        return NULL;
+    }
+    struct system_ps* aux = ps;
+    const uint32_t ps_size = ps->curr_size;
+    domainid_t pids[ps_size];
+    
+    for(int i=0; i<ps_size; i++)
+    {
+        pids[i] = aux->pid;
+        aux = aux->next;
+    }
+
+    size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+        + ROUND_UP(sizeof(domainid_t), 4) 
+        + ROUND_UP(ps_size * sizeof(int), 4);
+
+    void* args = malloc(args_size);
+    void* return_args = args;
+    
+    // 1. Channel to send down.
+    *((struct lmp_chan*) args) = client->lc;
+    
+    // 2. Size of pids list.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    *((uint32_t*)args) = ps_size;
+
+    // 3. List of pids.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(uint32_t), 4);
+    args = (void*) pids;
+    
     return return_args;
 }
 
@@ -508,6 +591,10 @@ errval_t recv_handler(void* arg)
                 response = (void*) send_simple_ok;
                 response_args = process_putchar_request(&msg, &cap);
                 break;
+            case AOS_RPC_GETCHAR:
+                response = (void*) send_serial_getchar;
+                response_args = process_getchar_request(&msg, &cap);
+                break;
             case AOS_RPC_STRING:
                 response = (void*) send_simple_ok;
                 response_args = process_string_request(&msg, &cap);
@@ -521,6 +608,7 @@ errval_t recv_handler(void* arg)
                 response_args = process_get_process_name_request(&msg, &cap);
                 break;
             case AOS_RPC_GET_PLIST:
+                printf("In AOS_RPC_GET_PLIST %u \n", AOS_RPC_GET_PLIST);
                 response = (void*) send_ps_list;
                 response_args = process_get_process_list_request(&msg, &cap);
                 break;
@@ -546,6 +634,27 @@ errval_t send_handshake(void* args)
     // 2. Send response.
     CHECK("lmp_chan_send handshake",
             lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK));
+
+    return SYS_ERR_OK;
+}
+
+errval_t send_serial_getchar(void* args)
+{
+    debug_printf("main.c send_serial_getchar!!\n");
+    // 1. Get channel to send down.
+    struct lmp_chan* lc = (struct lmp_chan*) args;
+
+    // 2. Get returned char.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(char), 4);
+    char* get_char = (char*) args;
+
+    // 3. Send response.
+    CHECK("lmp_chan_send memory",
+            lmp_chan_send2(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK,
+                    *get_char));
+
+    // 4. Free args.
+    free(args);
 
     return SYS_ERR_OK;
 }
@@ -609,7 +718,6 @@ errval_t send_pid(void* args)
     size_t code = err_is_fail(*err) ? AOS_RPC_FAILED : AOS_RPC_OK;
 
     // 2. Send response.
-    debug_printf("Pid is %u\n", *pid);
     CHECK("lmp_chan_send send_pid",
             lmp_chan_send3(lc, LMP_FLAG_SYNC, NULL_CAP, code, *err, *pid));
 
@@ -703,22 +811,7 @@ errval_t send_process_name(void* args)
             *((char*) arguments[j + 1] + 1) = *(buf + 1);
             *((char*) arguments[j + 1] + 2) = *(buf + 2);
             *((char*) arguments[j + 1] + 3) = *(buf + 3);
-            //debug_printf("!!!!!!%c%c%c%c\n", *buf, *(buf + 1), *(buf + 2), *(buf + 3)); 
-            /*debug_printf("!!!!!!%c%c%c%c\n",
-                *((char*) arguments[j + 1]),
-                *((char*) arguments[j + 1] + 1),
-                *((char*) arguments[j + 1] + 2),
-                *((char*) arguments[j + 1] + 3));*/
-            //printf("%s\n", args[j+1]);
-            //debug_printf("$$$$$$$$$$$$$$$$$$$$%u\n", *((uintptr_t*) arguments[j+1]));
         }
-        /*for (int i = 0; i < rem_length; i++) {
-            debug_printf("!!!!!!%c%c%c%c\n", 
-                *((char*) (arguments[i + 1] >> 24)), 
-                *((char*) (arguments[i + 1] >> 16)), 
-                *((char*) (arguments[i + 1] >> 8)), 
-                *((char*) (arguments[i + 1]))); 
-        }*/
 
         err = lmp_chan_send9(lc, LMP_FLAG_SYNC, NULL_CAP, 
                 *((uintptr_t*) arguments[9]), *((uintptr_t*) arguments[1]), 
@@ -733,23 +826,91 @@ errval_t send_process_name(void* args)
 
 errval_t send_ps_list(void* args)
 {
-    //TODO
-    //send data back to client
-    //reregister recursively data
-    return SYS_ERR_OK;
+    // 1. Get channel to send down.
+    struct lmp_chan* lc = (struct lmp_chan*) args;
+
+    // 2. Get process list size.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    uint32_t ps_size = *((uint32_t*)args);
+
+    // 3. Get process list     
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(uint32_t), 4);
+    domainid_t* ps_list = (domainid_t*)args;
+
+    size_t rem_length = ps_size;
+
+    debug_printf("!!!!! Size of list is %u", ps_size);
+
+    uintptr_t* arguments = (uintptr_t*) malloc(8 * sizeof(uintptr_t));
+
+    arguments[0] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));
+    *((uint32_t*) arguments[0]) = rem_length;
+    errval_t err;
+
+    if(rem_length > 7) {
+
+        for(int j = 0; j < 7; j++) {
+            arguments[j+1] = (uintptr_t) ((domainid_t*) malloc(sizeof(domainid_t)));
+            domainid_t *dom = (domainid_t *)arguments[j + 1];
+            *dom = ps_list[j];
+        }
+        rem_length -= 7;
+        //offset pointer by 32 bytes
+        ps_list += 7;
+
+        err = lmp_chan_send9(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK,
+                *((uintptr_t*) arguments[0]), *((uintptr_t*) arguments[1]), 
+                *((uintptr_t*) arguments[2]), *((uintptr_t*) arguments[3]), 
+                *((uintptr_t*) arguments[4]), *((uintptr_t*) arguments[5]), 
+                *((uintptr_t*) arguments[6]), *((uintptr_t*) arguments[7]));
+        
+        //TODO: determine if rounded needed
+        size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(rem_length * sizeof(char), 4);
+
+        void* new_args = malloc(args_size);
+        void *return_args = new_args;
+        
+        // 1. Channel to send down.
+        *((struct lmp_chan*) new_args) = *lc;
+        
+        // 2. Error code fromm spawn process.
+        new_args = (void*) ROUND_UP((uintptr_t) new_args + sizeof(struct lmp_chan), 4);
+        *((uint32_t *)new_args) = rem_length;
+
+        // 3. Copy process list.
+        new_args = (void*) ROUND_UP((uintptr_t) new_args + sizeof(uint32_t), 4);
+        memcpy(new_args, ps_list, rem_length);
+        // *((uint32_t *)new_args) = rem_length;
+
+        CHECK("lmp_chan_register_send parent",
+            lmp_chan_register_send(lc, get_default_waitset(),
+                    MKCLOSURE((void*) send_ps_list, return_args)));
+
+
+    } else {
+        for(int j = 0; j < rem_length; j++) {
+            arguments[j+1] = (uintptr_t) ((domainid_t*) malloc(sizeof(domainid_t)));
+            domainid_t *dom = (domainid_t *)arguments[j + 1];
+            *dom = ps_list[j];
+        }
+
+        for(int j = rem_length; j < 7; j++) {
+            arguments[j+1] = (uintptr_t) ((domainid_t*) malloc(sizeof(domainid_t)));
+            domainid_t *dom = (domainid_t *)arguments[j + 1];
+            *dom = -1;
+        }
+
+        err = lmp_chan_send9(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK,
+                *((uintptr_t*) arguments[0]), *((uintptr_t*) arguments[1]), 
+                *((uintptr_t*) arguments[2]), *((uintptr_t*) arguments[3]), 
+                *((uintptr_t*) arguments[4]), *((uintptr_t*) arguments[5]), 
+                *((uintptr_t*) arguments[6]), *((uintptr_t*) arguments[7]));
+    }
+
+    return err;
 
 }
-
-
-void* process_get_process_list_request(struct lmp_recv_msg* msg,
-        struct capref* remote_cap)
-{
-    //TODO
-    //parse request
-    return NULL;
-}
-
-
 
 int main(int argc, char *argv[])
 {
@@ -759,7 +920,7 @@ int main(int argc, char *argv[])
     err = invoke_kernel_get_core_id(cap_kernel, &my_core_id);
     assert(err_is_ok(err));
     disp_set_core_id(my_core_id);
-
+    
     debug_printf("init: on core %" PRIuCOREID " invoked as:", my_core_id);
     for (int i = 0; i < argc; i++) {
        printf(" %s", argv[i]);
