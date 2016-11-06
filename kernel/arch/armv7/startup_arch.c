@@ -767,9 +767,15 @@ void arm_kernel_startup(void)
         app_alloc_phys_start = core_data->memory_base_start;
         app_alloc_phys_end   = app_alloc_phys_start + core_data->memory_bytes;
 
+        const char *name;
+        if(core_data->init_name[0] != '\0')
+            name= core_data->init_name;
+        else
+            name= APP_INIT_MODULE_NAME;
+
         init_dcb =
             spawn_app_init(core_data,
-                           APP_INIT_MODULE_NAME,
+                           name,
                            app_alloc_phys,
                            app_alloc_phys_aligned);
 
