@@ -145,11 +145,11 @@ static void handle_pagefault(int subtype,
 
     struct paging_state* st = get_current_paging_state();
 
-    if (is_vregion_allocated(st, vaddr)) {
+    if (is_vregion_claimed(st, vaddr)) {
         // Some other thread has already allocated this?
-        debug_printf("Pagefault handler: page at %u has already been"
-                "allocated\n", vaddr);
-        return;
+        debug_printf("Pagefault handler: page at %u has not been claimed yet\n",
+                vaddr);
+        thread_exit(THREAD_EXIT_PAGEFAULT);
     }
 
     errval_t err;
