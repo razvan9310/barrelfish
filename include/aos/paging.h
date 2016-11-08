@@ -144,8 +144,8 @@ errval_t paging_map_frame_attr(struct paging_state *st, void **buf,
                                size_t bytes, struct capref frame,
                                int flags, void *arg1, void *arg2);
 
-// Whether the paging_node containing vaddr is of type NodeType_Allocated.
-bool is_vregion_allocated(struct paging_state* st, lvaddr_t vaddr);
+// Whether the paging_node containing vaddr is of type NodeType_Claimed.
+bool is_vregion_claimed(struct paging_state* st, lvaddr_t vaddr);
 
 /// Map user provided frame at user provided VA with given flags.
 errval_t paging_map_fixed_attr(struct paging_state *st, lvaddr_t vaddr,
