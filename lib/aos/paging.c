@@ -288,7 +288,7 @@ slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref frame, size
     return SYS_ERR_OK;
 }
 
-// Whether the vregion given by vaddr and size is of type NodeType_Allocated.
+// Whether the vregion given by vaddr and size is of type NodeType_Claimed.
 bool is_vregion_claimed(struct paging_state* st, lvaddr_t vaddr)
 {
     struct paging_node* node = st->head;
