@@ -12,6 +12,7 @@
 
 [ build application { target = "init",
                       cFiles = [
+                      	"coreboot.c",
                         "main.c",
                         "mem_alloc.c"
                       ],
