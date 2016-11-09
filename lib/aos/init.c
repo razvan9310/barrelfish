@@ -134,7 +134,7 @@ static void handle_pagefault(int subtype,
         thread_exit(THREAD_EXIT_PAGEFAULT);
     }
 
-    if (vaddr >= VADDR_RESERVED) {
+    if (vaddr >= KERNEL_WINDOW) {
         // This is not the heap, kill the thread.
         debug_printf("Thread attempted to access non-heap address %u,"
                 "killing it\n", vaddr);
@@ -252,6 +252,8 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
                     NULL,
                     (void*) stack_base, (void*) stack_top,
                     NULL, NULL));
+
+    debug_printf("SUCCESSFULLY SET HANDLER\n");
 
     // init domains only get partial init
     if (init_domain) {

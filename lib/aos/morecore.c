@@ -124,7 +124,7 @@ errval_t morecore_init(void)
 
     CHECK("morecore_init#paging_region_init",
             paging_region_init(get_current_paging_state(),
-            &state->region, 1 << 26));  // 64 MB for general-purpose malloc's.
+            &state->region, 1u << 29)); 
 
     sys_morecore_alloc = morecore_alloc;
     sys_morecore_free = morecore_free;

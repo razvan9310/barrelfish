@@ -24,7 +24,7 @@
 typedef int paging_flags_t;
 
 #define VADDR_OFFSET ((lvaddr_t)1UL*1024*1024*1024) // 1GB
-#define VADDR_RESERVED ((lvaddr_t) 3UL * 1024 * 1024 * 1024) // 3GB
+#define KERNEL_WINDOW 0x80000000                    // 2GB
 
 #define PAGING_SLAB_BUFSIZE 12
 

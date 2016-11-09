@@ -29,6 +29,7 @@
 /* Barrelfish kernel interface definitions */
 #include <errors/errno.h>
 #include <barrelfish_kpi/types.h>
+#include <barrelfish_kpi/arm_core_data.h>
 #include <barrelfish_kpi/capabilities.h>
 #include <barrelfish_kpi/cpu.h> // XXX!?
 #include <barrelfish_kpi/paging_arch.h>
