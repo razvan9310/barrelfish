@@ -1139,6 +1139,7 @@ errval_t caps_lookup_slot(struct capability *rootcn, capaddr_t cptr,
     // cnode.
     if (level == 1) {
         if (l2cnode->cap.type == ObjType_Null) {
+          printk(LOG_WARN, "l1index is %d\n", l1index);
             return SYS_ERR_CAP_NOT_FOUND;
         }
         *ret = l2cnode;
@@ -1210,6 +1211,8 @@ errval_t caps_create_from_existing(struct capability *root, capaddr_t cnode_cptr
     err = caps_lookup_cap(root, cnode_cptr, cnode_level, &cnode,
                           CAPRIGHTS_READ_WRITE);
     if (err_is_fail(err)) {
+        printk(LOG_WARN, "failed to lookup cnode with cptr %u, level %d, slot %u: %d\n",
+            cnode_cptr, cnode_level, dest_slot, err);
         return err_push(err, SYS_ERR_SLOT_LOOKUP_FAIL);
     }
     if (cnode->type != ObjType_L1CNode &&

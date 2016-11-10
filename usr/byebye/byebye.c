@@ -16,8 +16,22 @@
 
 #include <stdio.h>
 
+#include <aos/aos.h>
+
 int main(int argc, char *argv[])
 {
     printf("Goodbye :(\n");
+
+    char* c = (char*) malloc(120 * 1024 * 1024);
+    *c = 'B';
+    sys_debug_flush_cache();
+    *(c + 40 * 1024 * 1024) = 'Y';
+    sys_debug_flush_cache();
+    *(c + 80 * 1024 * 1024) = 'E';
+    sys_debug_flush_cache();
+
+    debug_printf("%c%c%c\n", *c, *(c + 40 * 1024 * 1024),
+    		*(c + 80 * 1024 * 1024));
+
     return 0;
 }

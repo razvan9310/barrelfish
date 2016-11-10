@@ -30,7 +30,8 @@ errval_t aos_ram_free(struct capref cap, size_t bytes)
  * \brief Setups a local memory allocator for init to use till the memory server
  * is ready to be used.
  */
-errval_t initialize_ram_alloc(void)
+errval_t initialize_ram_alloc(genpaddr_t* remaining_mem_base,
+        gensize_t* remaining_mem_size)
 {
     debug_printf("initialize_ram_alloc\n");
     errval_t err;
@@ -69,27 +70,38 @@ errval_t initialize_ram_alloc(void)
         .slot = 0,
     };
 
+    size_t ram_regions_seen = 0;
+    *remaining_mem_base = 0;
+    *remaining_mem_size = 0;
     genpaddr_t base = 0;
     for (int i = 0; i < bi->regions_length; i++) {
         if (bi->regions[i].mr_type == RegionType_Empty) {
-            err = mm_add(&aos_mm, mem_cap, bi->regions[i].mr_base, bi->regions[i].mr_bytes);
-            if (err_is_ok(err)) {
-                if (base == 0) {
-                    base = bi->regions[i].mr_base;
+            if (ram_regions_seen == my_core_id) {
+                err = mm_add(&aos_mm, mem_cap, bi->regions[i].mr_base, bi->regions[i].mr_bytes);
+                if (err_is_ok(err)) {
+                    if (base == 0) {
+                        base = bi->regions[i].mr_base;
+                    }
+                    mem_avail += bi->regions[i].mr_bytes;
+                } else {
+                    DEBUG_ERR(err, "Warning: adding RAM region %d (%p/%zu) FAILED", i, bi->regions[i].mr_base, bi->regions[i].mr_bytes);
                 }
-                mem_avail += bi->regions[i].mr_bytes;
+
+                err = slot_prealloc_refill(aos_mm.slot_alloc_inst);
+                if (err_is_fail(err) && err_no(err) != MM_ERR_SLOT_MM_ALLOC) {
+                    DEBUG_ERR(err, "in slot_prealloc_refill() while initialising"
+                            " memory allocator");
+                    abort();
+                }
+
+                mem_cap.slot++;
             } else {
-                DEBUG_ERR(err, "Warning: adding RAM region %d (%p/%zu) FAILED", i, bi->regions[i].mr_base, bi->regions[i].mr_bytes);
+                if (*remaining_mem_base == 0) {
+                    *remaining_mem_base = bi->regions[i].mr_base;
+                }
+                *remaining_mem_size += bi->regions[i].mr_bytes;
             }
-
-            err = slot_prealloc_refill(aos_mm.slot_alloc_inst);
-            if (err_is_fail(err) && err_no(err) != MM_ERR_SLOT_MM_ALLOC) {
-                DEBUG_ERR(err, "in slot_prealloc_refill() while initialising"
-                        " memory allocator");
-                abort();
-            }
-
-            mem_cap.slot++;
+            ++ram_regions_seen;
         }
     }
     debug_printf("Added %"PRIu64" MB of physical memory.\n", mem_avail / 1024 / 1024);
@@ -104,70 +116,6 @@ errval_t initialize_ram_alloc(void)
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_RAM_ALLOC_SET);
     }
-
-    /* Testing. */
-    // int i;
-    // for (i = 1; i <= 600; ++i) {
-    //     struct capref frame;
-    //     mm_alloc(&aos_mm, BASE_PAGE_SIZE, &frame);
-    //     if (i > 0 && i % 50 == 0) {
-    //         printf("Successfully allocated %i frames of size %u\n", i, BASE_PAGE_SIZE);
-    //     }
-    // }
-
-    // /* Test mapping frames to vspace. */
-    // /* Create a 64MB frame. */
-    // struct capref frame;
-    // size_t retsize;
-    // frame_alloc(&frame, 64 * 1024 * 1024u, &retsize);
-    // void *buff;
-    // paging_map_frame(get_current_paging_state(), &buff, 64 * 1024 * 1024u,
-    //                  frame, NULL, NULL);
-    // if (buff == NULL) {
-    //     return 1;
-    // }
-    
-    // char *cbuff = (char*) buff;
-    // for (i = 0; i < 16; ++i) {
-    //     cbuff[i] = 'x';
-    // }
-    // sys_debug_flush_cache();
-    // for (i = 0; i < 16; ++i) {
-    //     printf("%c", cbuff[i]);
-    // }
-    // printf("\n");
-
-    // cbuff += 16 * 1024 * 1024;
-    // for (i = 0; i < 16; ++i) {
-    //     cbuff[i] = 'y';
-    // }
-    // sys_debug_flush_cache();
-    // for (i = 0; i < 16; ++i) {
-    //     printf("%c", cbuff[i]);
-    // }
-    // printf("\n");
-    
-    // cbuff += 16 * 1024 * 1024;
-    // for (i = 0; i < 16; ++i) {
-    //     cbuff[i] = 'z';
-    // }
-    // sys_debug_flush_cache();
-    // for (i = 0; i < 16; ++i) {
-    //     printf("%c", cbuff[i]);
-    // }
-    // printf("\n");
-
-    // cbuff += 16 * 1024 * 1024;
-    // for (i = 0; i < 16; ++i) {
-    //     cbuff[i] = 't';
-    // }
-    // sys_debug_flush_cache();
-    // for (i = 0; i < 16; ++i) {
-    //     printf("%c", cbuff[i]);
-    // }
-    // printf("\n");
-
-    // mm_destroy(&aos_mm);
 
     return SYS_ERR_OK;
 }

@@ -228,7 +228,8 @@ void* process_handshake_request(struct capref* remote_cap)
 
         //Spawn process and fill spawinfo
         //struct spawninfo* process_info = (struct spawninfo*) malloc(sizeof(struct spawninfo));
-        errval_t err = spawn_load_by_name(client->spawn_buf, (struct spawninfo*) malloc(sizeof(struct spawninfo)));
+        errval_t err = spawn_load_by_name(client->spawn_buf,
+                (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id);
         if (err_is_fail(err)) {
             DEBUG_ERR(err, "slot_alloc_init");
         }
@@ -947,9 +948,32 @@ int main(int argc, char *argv[])
     //     DEBUG_ERR(err, "slot_alloc_init");
     // }
 
-    err = initialize_ram_alloc();
-    if(err_is_fail(err)){
-        DEBUG_ERR(err, "initialize_ram_alloc");
+    genpaddr_t remaining_mem_base = 0;
+    gensize_t remaining_mem_size = 0;
+    if (my_core_id == 0) {
+        err = initialize_ram_alloc(&remaining_mem_base, &remaining_mem_size);
+        if(err_is_fail(err)){
+            DEBUG_ERR(err, "initialize_ram_alloc");
+        }
+    }
+
+    void* urpc_buf;
+    CHECK("mapping URPC frame into vspace",
+            map_urpc_frame_to_vspace(&urpc_buf, 2u * BASE_PAGE_SIZE, my_core_id));
+    write_to_urpc(urpc_buf, remaining_mem_base, remaining_mem_size, bi,
+            my_core_id);
+    CHECK("forging RAM cap & retrieving bi from URPC frame",
+            read_from_urpc(urpc_buf, &bi, my_core_id));
+    CHECK("start core 1", start_core(1, my_core_id, bi));
+
+    if (my_core_id == 1) {
+        err = initialize_ram_alloc(&remaining_mem_base, &remaining_mem_size);
+        if(err_is_fail(err)){
+            DEBUG_ERR(err, "initialize_ram_alloc");
+        }
+        
+        CHECK("reading modules from URPC",
+                read_modules(urpc_buf, bi, my_core_id));
     }
 
     CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
@@ -964,56 +988,17 @@ int main(int argc, char *argv[])
             lmp_chan_register_recv(lc, get_default_waitset(),
                     MKCLOSURE((void*) recv_handler, lc)));
 
-    // // ALLOCATE A LOT OF MEMORY TROLOLOLOLO.
-    // struct capref frame;
-    // size_t retsize;
-    // err = frame_alloc(&frame, 900 * 1024 * 1024, &retsize);
-    // if (err_is_fail(err)) {
-    //     DEBUG_ERR(err, "PANIC FRAME ALLOC 64 MB");
-    // } else {
-    //     debug_printf("main.c: was given frame size %u\n", retsize);
-    // }
-    // void* buf;
-    // err = paging_map_frame_attr(get_current_paging_state(),
-    //     &buf, retsize, frame,
-    //     VREGION_FLAGS_READ_WRITE, NULL, NULL);
-    // if (err_is_fail(err)) {
-    //     DEBUG_ERR(err, "PANIC MAPPING 64 MB FRAME");
-    // }
-
-    // debug_printf("main.c: testing memory @ %p\n", buf);
-    // char* cbuf = (char*)buf;
-    // *cbuf = 'J';
-    // sys_debug_flush_cache();
-    // printf("%c\n", *cbuf);
-
-    // cbuf += 225 * 1024 * 1024;
-    // *cbuf = 'K';
-    // sys_debug_flush_cache();
-    // printf("%c\n", *cbuf);
-
-    // cbuf += 225 * 1024 * 1024;
-    // *cbuf = 'L';
-    // sys_debug_flush_cache();
-    // printf("%c\n", *cbuf);
-
-    // cbuf += 225 * 1024 * 1024;
-    // *cbuf = 'M';
-    // sys_debug_flush_cache();
-    // printf("%c\n", *cbuf);
-
-    // char *a = malloc(sizeof(char));
-    // *a = 'a';
-    // realloc(a, 2*sizeof(char));
-    // printf("Value of char after resize %c\n", *a);
-    // *(a+1) = 'b';
-    // printf("Value of char after resize %c\n", *(a+1));
-    // spawn a few helloz
-    // spawn_load_by_name("hello", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    //spawn_load_by_name("byebye", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-    //spawn_load_by_name("memeater", (struct spawninfo*) malloc(sizeof(struct spawninfo)));
-
-    CHECK("start core 1", start_core(1, my_core_id, bi));
+    if (my_core_id == 0) {
+        // Spawn "Hello" on core 0.
+        CHECK("spawning hello",
+                spawn_load_by_name("hello",
+                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+    } else {
+        // Spawn "Byebye" on core 0.
+        CHECK("spawning byebye",
+                spawn_load_by_name("byebye",
+                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+    }
 
     debug_printf("Message handler loop\n");
     // Hang around

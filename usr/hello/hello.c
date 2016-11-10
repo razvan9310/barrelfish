@@ -67,6 +67,14 @@ int main(int argc, char *argv[])
 
     debug_printf("Hello, world! from THE numbawan original AOS homie waddup yo you know I'm THE BAWS\n");
     
+    char* c = (char*) malloc(128 * 1024 * 1024);
+    *c = 'H';
+    sys_debug_flush_cache();
+    *(c + 64 * 1024 * 1024) = 'I';
+    sys_debug_flush_cache();
+
+    debug_printf("%c%c\n", *c, *(c + 64 * 1024 * 1024));
+
     // debug_printf("Dereferencing NULL\n");
     // int *null_ptr = NULL;    
     // *null_ptr = 13;

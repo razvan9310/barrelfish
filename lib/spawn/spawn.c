@@ -462,7 +462,7 @@ errval_t elf_alloc_section(void* state, genvaddr_t base, size_t bytes,
     return SYS_ERR_OK; 
 }
 
-errval_t setup_dispatcher(struct spawninfo* si)
+errval_t setup_dispatcher(struct spawninfo* si, coreid_t core_id)
 {
     // 1. Create dispatcher.
     CHECK("dispatcher slot", slot_alloc(&si->dispatcher));
@@ -531,7 +531,7 @@ errval_t setup_dispatcher(struct spawninfo* si)
     arch_registers_state_t* disabled_area = dispatcher_get_disabled_save_area(
             si->disp_handle);
 
-    disp_gen->core_id = 0;
+    disp_gen->core_id = core_id;
     disp->udisp = (lvaddr_t) vaddr_child;
     disp->disabled = 1;
     disp->fpu_trap = 1;
@@ -640,7 +640,8 @@ errval_t setup_args(struct spawninfo* si, struct mem_region* mr)
 
 // TODO(M2): Implement this function such that it starts a new process
 // TODO(M4): Build and pass a messaging channel to your child process
-errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si)
+errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si,
+        coreid_t core_id)
 {
 
     DPRINT("loading and starting: %s", binary_name);
@@ -690,7 +691,7 @@ errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si)
     CHECK("setup_elf", setup_elf(si, mapped_elf, child_frame_id.bytes));
 
     // - Setup dispatcher.
-    CHECK("setup_dispatcher", setup_dispatcher(si));
+    CHECK("setup_dispatcher", setup_dispatcher(si, core_id));
 
     // - Setup environment
     // get arguments from menu.lst
