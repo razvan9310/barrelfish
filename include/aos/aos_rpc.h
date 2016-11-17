@@ -39,12 +39,16 @@ struct aos_rpc {
     int ps_offset;
 };
 
+errval_t aos_rpc_handshake_send_handler(void* void_args);
+errval_t aos_rpc_handshake_recv_handler(void* void_args);
 errval_t aos_rpc_putchar_send_handler(void* void_args);
 errval_t aos_rpc_putchar_recv_handler(void* void_args);
 errval_t aos_rpc_send_number_send_handler(void* void_args);
 errval_t aos_rpc_send_number_recv_handler(void* void_args);
 errval_t aos_rpc_send_string_send_handler(void* void_args);
 errval_t aos_rpc_send_string_recv_handler(void* void_args);
+errval_t aos_rpc_ram_send_handler(void* void_args);
+errval_t aos_rpc_ram_recv_handler(void* void_args);
 errval_t aos_rpc_process_spawn_send_handler(void* void_args);
 errval_t aos_rpc_process_spawn_recv_handler(void* void_args);
 errval_t aos_rpc_process_get_name_send_handler(void* void_args);
@@ -57,29 +61,21 @@ errval_t aos_rpc_serial_getchar_recv_handler(void* void_args);
 /**
  * \brief send a number over the given channel
  */
-errval_t aos_rpc_send_number(struct aos_rpc *chan, uintptr_t val);
+errval_t aos_rpc_send_number(struct aos_rpc *chan, uintptr_t val,
+        coreid_t core);
 
 /**
  * \brief send a string over the given channel
  */
-errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string);
-
-/**
- * \brief RAM cap request.
- */
-errval_t aos_rpc_ram_send_handler(void* void_args);
-
-/**
- * \brief RAM cap response.
- */
-errval_t aos_rpc_ram_recv_handler(void* void_args);
+errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string,
+        coreid_t core);
 
 /**
  * \brief request a RAM capability with >= request_bits of size over the given
  * channel.
  */
 errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t bytes,
-                             struct capref *retcap, size_t *ret_bytes);
+        struct capref *retcap, size_t *ret_bytes);
 
 /**
  * \brief get one character from the serial port
@@ -98,7 +94,7 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *chan, char c);
  * \arg newpid the process id of the newly spawned process
  */
 errval_t aos_rpc_process_spawn(struct aos_rpc *chan, char *name,
-                               coreid_t core, domainid_t *newpid);
+        coreid_t core, domainid_t *newpid);
 
 /**
  * \brief Get name of process with id pid.
@@ -108,7 +104,7 @@ errval_t aos_rpc_process_spawn(struct aos_rpc *chan, char *name,
  * responsibility.
  */
 errval_t aos_rpc_process_get_name(struct aos_rpc *chan, domainid_t pid,
-                                  char **name);
+        coreid_t core, char **name);
 
 /**
  * \brief Get process ids of all running processes
@@ -118,17 +114,7 @@ errval_t aos_rpc_process_get_name(struct aos_rpc *chan, domainid_t pid,
  * \arg pid_count The number of entries in `pids' if the call was successful
  */
 errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
-                                      domainid_t **pids, size_t *pid_count);
-
-/**
- * \brief Initiate handshake by sending local cap to server.
- */
-errval_t aos_rpc_handshake_send_handler(void* void_args);
-
-/**
- * \brief Finalize handshake by receiving ack from server.
- */
-errval_t aos_rpc_handshake_recv_handler(void* void_args);
+        coreid_t core, domainid_t **pids, size_t *pid_count);
 
 /**
  * \brief General-purpose blocking RPC send-and-receive function.

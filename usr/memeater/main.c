@@ -113,14 +113,14 @@ static errval_t test_basic_rpc(void)
     debug_printf("RPC: testing basic RPCs...\n");
 
     debug_printf("RPC: sending number...\n");
-    err =  aos_rpc_send_number(&init_rpc, 42);
+    err =  aos_rpc_send_number(&init_rpc, 42, false);
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "could not send a string\n");
         return err;
     }
 
     debug_printf("RPC: sending small string...\n");
-    err =  aos_rpc_send_string(&init_rpc, "Hello init");
+    err =  aos_rpc_send_string(&init_rpc, "Hello init", false);
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "could not send a string\n");
         return err;
@@ -135,7 +135,7 @@ static errval_t test_basic_rpc(void)
     // }
 
     debug_printf("RPC: sending large string...\n");
-    err =  aos_rpc_send_string(&init_rpc, str);
+    err =  aos_rpc_send_string(&init_rpc, str, false);
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "could not send a string\n");
         return err;
