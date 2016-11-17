@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 
     CHECK("lmp_chan_register_recv child",
             lmp_chan_register_recv(lc, get_default_waitset(),
-                    MKCLOSURE((void*) recv_handler, lc)));
+                    MKCLOSURE((void*) local_recv_handler, lc)));
 
     if (my_core_id == 0) {
         // Spawn "Hello" on core 0.

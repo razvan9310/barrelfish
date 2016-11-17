@@ -57,56 +57,55 @@ struct system_ps {
 struct client_state* identify_client(struct capref* cap);
 
 /**
- * \bief General-purpose RPC server-side receive handler. This is the entry
- * point into request handling.
+ * \bief General-purpose local RPC server-side receive handler. This is the
+ * entry point into local (same-core) request handling.
  */
-errval_t recv_handler(void* arg);
+errval_t local_recv_handler(void* arg);
 
 /**
- * \brief Processes a new client handshake request.
+ * \brief Processes a new client same-core handshake request.
  */
-void* process_handshake_request(struct capref* request_cap);
+void* process_local_handshake_request(struct capref* request_cap);
 /**
  * \brief Processes a client RAM request.
  */
-void* process_memory_request(struct lmp_recv_msg* msg,
+void* process_local_memory_request(struct lmp_recv_msg* msg,
         struct capref* request_cap);
 /**
- * \brief Processes a send number request, potentially for another core.
+ * \brief Processes a same-core send number request, potentially for another core.
  */
-void* process_number_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote);
+void* process_local_number_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap);
 /**
  * \brief Processes a terminal driver putchar request.
  */
-void* process_putchar_request(struct lmp_recv_msg* msg,
+void* process_local_putchar_request(struct lmp_recv_msg* msg,
         struct capref* request_cap);
 /**
  * \brief Processes a terminal driver getchar request.
  */
-void* process_getchar_request(struct lmp_recv_msg* msg,
+void* process_local_getchar_request(struct lmp_recv_msg* msg,
         struct capref* request_cap);
 /**
  * \brief Processes a send string request.
  */
-void* process_string_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote);
+void* process_local_string_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap);
 /**
- * \brief Processes a spawn new process request, potentially on another core.
+ * \brief Processes a same-core spawn new process request.
  */
-void* process_spawn_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote);
+void* process_local_spawn_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap);
 /**
- * \brief Processes a get process name for PID request, potentially from another
- * core.
+ * \brief Processes a same-core get process name for PID request.
  */
-void* process_get_process_name_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote);
+void* process_local_get_process_name_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap);
 /**
- * \brief Processes a get processes list request, potentially from another core.
+ * \brief Processes a same-core get processes list request.
  */
-void* process_get_process_list_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote);
+void* process_local_get_process_list_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap);
 
 /**
  * \brief Handshake response handler.

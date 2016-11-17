@@ -41,7 +41,7 @@ struct client_state* identify_client(struct capref* cap)
     return client;
 }
 
-errval_t recv_handler(void* arg)
+errval_t local_recv_handler(void* arg)
 {
     struct lmp_chan* lc = (struct lmp_chan*) arg;
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
@@ -52,68 +52,51 @@ errval_t recv_handler(void* arg)
     // Reregister.
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
     lmp_chan_register_recv(lc, get_default_waitset(),
-            MKCLOSURE((void *)recv_handler, arg));
+            MKCLOSURE((void *)local_recv_handler, arg));
 
     if (msg.buf.msglen > 0) {
         void* response;
         void* response_args;
-        
-        coreid_t server_core;
-        if (msg.words[0] == AOS_RPC_HANDSHAKE) {
-            // Handshakin always involves the local (current) core.
-            server_core = my_core_id;
-        } else if (msg.words[0] == AOS_RPC_MEMORY || AOS_RPC_PUTCHAR
-                || AOS_RPC_GETCHAR || AOS_RPC_STRING) {
-            // These can only target the server on the BSP core 0.
-            server_core = 0;  // TODO: Some nicer way to not hardcode this '0'?
-        } else {
-            // All other type of messages pass in the desired server core.
-            server_core = msg.words[1];
-        }
-
-        // Whether this requests needs in fact be served remotely by the other
-        // core.
-        bool remote = server_core != my_core_id;
 
         switch (msg.words[0]) {
             
             case AOS_RPC_HANDSHAKE:
                 response = (void*) send_handshake;
-                response_args = process_handshake_request(&cap);
+                response_args = process_local_handshake_request(&cap);
                 break;
             case AOS_RPC_MEMORY:
                 response = (void*) send_memory;
-                response_args = process_memory_request(&msg, &cap);
+                response_args = process_local_memory_request(&msg, &cap);
                 break;
             case AOS_RPC_NUMBER:
                 response = (void*) send_simple_ok;
-                response_args = process_number_request(&msg, &cap, remote);
+                response_args = process_local_number_request(&msg, &cap);
                 break;
             case AOS_RPC_PUTCHAR:
                 response = (void*) send_simple_ok;
-                response_args = process_putchar_request(&msg, &cap);
+                response_args = process_local_putchar_request(&msg, &cap);
                 break;
             case AOS_RPC_GETCHAR:
                 response = (void*) send_serial_getchar;
-                response_args = process_getchar_request(&msg, &cap);
+                response_args = process_local_getchar_request(&msg, &cap);
                 break;
             case AOS_RPC_STRING:
                 response = (void*) send_simple_ok;
-                response_args = process_string_request(&msg, &cap, remote);
+                response_args = process_local_string_request(&msg, &cap);
                 break;
             case AOS_RPC_SPAWN:
                 response = (void*) send_pid;
-                response_args = process_spawn_request(&msg, &cap, remote);
+                response_args = process_local_spawn_request(&msg, &cap);
                 break;
             case AOS_RPC_GET_PNAME:
                 response = (void*) send_process_name;
-                response_args = process_get_process_name_request(&msg, &cap,
-                        remote);
+                response_args = process_local_get_process_name_request(
+                        &msg, &cap);
                 break;
             case AOS_RPC_GET_PLIST:
                 response = (void*) send_ps_list;
-                response_args = process_get_process_list_request(&msg, &cap,
-                        remote);
+                response_args = process_local_get_process_list_request(
+                        &msg, &cap);
                 break;
           
             default:
@@ -129,7 +112,7 @@ errval_t recv_handler(void* arg)
     return err;
 }
 
-void* process_handshake_request(struct capref* request_cap)
+void* process_local_handshake_request(struct capref* request_cap)
 {
     struct client_state* existing = identify_client(request_cap);
     if (existing != NULL) {
@@ -166,12 +149,13 @@ void* process_handshake_request(struct capref* request_cap)
     return (void*) &new_client->lc;
 }
 
-void* process_memory_request(struct lmp_recv_msg* msg,
+void* process_local_memory_request(struct lmp_recv_msg* msg,
         struct capref* request_cap)
 {
     struct client_state* client = identify_client(request_cap);
     if (client == NULL) {
-        debug_printf("ERROR: process_memory_request: could not identify client\n");
+        debug_printf("ERROR: process_local_memory_request: could not identify "
+                "client\n");
         return NULL;
     }
 
@@ -188,7 +172,7 @@ void* process_memory_request(struct lmp_recv_msg* msg,
 
     // Allocate RAM.
     struct capref mem_cap;
-    errval_t err = ram_alloc(&mem_cap, req_size);//frame_alloc(mem_cap, req_size, &ret_size);
+    errval_t err = ram_alloc(&mem_cap, req_size);
     client->ram += req_size;
 
     // Response args.
@@ -217,8 +201,8 @@ void* process_memory_request(struct lmp_recv_msg* msg,
     return return_args;
 }
 
-void* process_number_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote)
+void* process_local_number_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap)
 {
     // Print what we got.
     debug_printf("Server received number %u\n", (uint32_t) msg->words[2]);
@@ -226,7 +210,7 @@ void* process_number_request(struct lmp_recv_msg* msg,
     // Identify client.
     struct client_state* client = identify_client(request_cap);
     if (client == NULL) {
-        debug_printf("ERROR: process_number_request: could not idetify client");
+        debug_printf("ERROR: process_local_number_request: could not idetify client");
         return NULL;
     }
 
@@ -235,7 +219,7 @@ void* process_number_request(struct lmp_recv_msg* msg,
 }
 
 
-void* process_putchar_request(struct lmp_recv_msg* msg,
+void* process_local_putchar_request(struct lmp_recv_msg* msg,
         struct capref* request_cap)
 {
     // Put character.
@@ -244,7 +228,7 @@ void* process_putchar_request(struct lmp_recv_msg* msg,
     // Identify client.
     struct client_state* client = identify_client(request_cap);
     if (client == NULL) {
-        debug_printf("ERROR: process_putchar_request: could not idetify client");
+        debug_printf("ERROR: process_local_putchar_request: could not idetify client");
         return NULL;
     }
 
@@ -252,13 +236,13 @@ void* process_putchar_request(struct lmp_recv_msg* msg,
     return (void*) &client->lc;
 }
 
-void* process_getchar_request(struct lmp_recv_msg* msg,
+void* process_local_getchar_request(struct lmp_recv_msg* msg,
             struct capref* request_cap)
 {
     // Identify Client
     struct client_state* client = identify_client(request_cap);
     if (client == NULL) {
-        debug_printf("ERROR: process_putchar_request: could not idetify client\n");
+        debug_printf("ERROR: process_local_putchar_request: could not idetify client\n");
         return NULL;
     }
 
@@ -284,8 +268,8 @@ void* process_getchar_request(struct lmp_recv_msg* msg,
     return return_args;
 }
 
-void* process_string_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote)
+void* process_local_string_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap)
 {
     uint32_t remaining = msg->words[2];
 
@@ -300,7 +284,7 @@ void* process_string_request(struct lmp_recv_msg* msg,
         client = client->next;
     }
     if (client == NULL) {
-        debug_printf("main.c: process_string_request: could not find client\n");
+        debug_printf("main.c: process_local_string_request: could not find client\n");
         return NULL;
     }
 
@@ -329,8 +313,8 @@ void* process_string_request(struct lmp_recv_msg* msg,
     return (void*) &client->lc;
 }
 
-void* process_spawn_request(struct lmp_recv_msg* msg,
-    struct capref* request_cap, bool remote)
+void* process_local_spawn_request(struct lmp_recv_msg* msg,
+    struct capref* request_cap)
 {
     uint32_t remaining = msg->words[2];
 
@@ -345,7 +329,7 @@ void* process_spawn_request(struct lmp_recv_msg* msg,
         client = client->next;
     }
     if (client == NULL) {
-        debug_printf("main.c: process_spawn_request: could not find client\n");
+        debug_printf("main.c: process_local_spawn_request: could not find client\n");
         return NULL;
     }
 
@@ -399,7 +383,6 @@ void* process_spawn_request(struct lmp_recv_msg* msg,
         new_ps->pid = ++last_issued_pid;
 
         //Spawn process and fill spawinfo
-        //struct spawninfo* process_info = (struct spawninfo*) malloc(sizeof(struct spawninfo));
         errval_t err = spawn_load_by_name(client->spawn_buf,
                 (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id);
         if (err_is_fail(err)) {
@@ -407,7 +390,7 @@ void* process_spawn_request(struct lmp_recv_msg* msg,
         }
         //TODO: remeber to free spawninfo at some point
         
-        //ps->process = process_info;
+        //ps->process = process_local_info;
         new_ps->name = (char*) malloc(strlen(client->spawn_buf) * sizeof(char));
         strcpy(new_ps->name,  client->spawn_buf);
         //Add process to process list
@@ -431,7 +414,6 @@ void* process_spawn_request(struct lmp_recv_msg* msg,
 
         args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
         *((domainid_t*) args) = new_ps->pid;
-        //debug_printf("%s process pid is %u\n", client->spawn_buf, *((domainid_t*) args));
         
         
         client->spawn_buf_idx = 0;
@@ -464,8 +446,8 @@ void* process_spawn_request(struct lmp_recv_msg* msg,
     //return (void*) &client->lc;
 }
 
-void* process_get_process_name_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote)
+void* process_local_get_process_name_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap)
 {
     debug_printf("Server received pid %u\n", (uint32_t) msg->words[2]);
     domainid_t pid = (domainid_t) msg->words[2];
@@ -473,7 +455,8 @@ void* process_get_process_name_request(struct lmp_recv_msg* msg,
     // Identify client.
     struct client_state* client = identify_client(request_cap);
     if (client == NULL) {
-        debug_printf("ERROR: process_pid_request: could not idetify client");
+        debug_printf("ERROR: procss_local_get_process_name_request: could not "
+                "identify client");
         return NULL;
     }
 
@@ -515,13 +498,13 @@ void* process_get_process_name_request(struct lmp_recv_msg* msg,
     return return_args;
 }
 
-void* process_get_process_list_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap, bool remote)
+void* process_local_get_process_list_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap)
 {
     struct client_state* client = identify_client(request_cap);
     if (client == NULL) {
-        debug_printf("ERROR: process_get_list_request: could not idetify "
-        		"client");
+        debug_printf("ERROR: process_local_get_process_list_request: could "
+                "not identify client");
         return NULL;
     }
     struct system_ps* aux = ps;
