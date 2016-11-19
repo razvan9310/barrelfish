@@ -75,6 +75,22 @@ int main(int argc, char *argv[])
     void* urpc_buf;
     CHECK("mapping URPC frame into vspace",
             map_urpc_frame_to_vspace(&urpc_buf, 2u * BASE_PAGE_SIZE, my_core_id));
+
+    // Divide buffer into two half: one part for core 0 and other for core 1
+    // Each part is BASE_PAGE_SIZE long
+
+    // Initialize first half of the buffer
+    void *first_half = urpc_buf;
+    *((char*) first_half) = 'C';
+    first_half += 2*sizeof(char);
+    *((char*) first_half) = 'C';
+
+    // Intialize the second half of the buffer
+    void *second_half = (urpc_buf+BASE_PAGE_SIZE);
+    *((char*) second_half) = 'C';
+    second_half += 2*sizeof(char);
+    *((char*) second_half) = 'C';
+
     write_to_urpc(urpc_buf, remaining_mem_base, remaining_mem_size, bi,
             my_core_id);
     CHECK("forging RAM cap & retrieving bi from URPC frame",
