@@ -18,7 +18,7 @@
                         "rpc_server.c"
                       ],
                       addLinkFlags = [ "-e _start_init"],
-                      addLibraries = [ "mm", "getopt", "elf", "spawn" ],
+                      addLibraries = [ "urpc", "mm", "getopt", "elf", "spawn" ],
                       architectures = allArchitectures
                     }
 ]

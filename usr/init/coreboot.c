@@ -14,14 +14,13 @@
 
 #include "coreboot.h"
 
-errval_t map_urpc_frame_to_vspace(void** ret, size_t bytes,
-        coreid_t my_core_id) {
+errval_t map_urpc_frame_to_vspace(void** ret, coreid_t my_core_id) {
     size_t retsize;
     if (my_core_id == 0) {
         CHECK("allocating memory for URPC frame",
-            frame_alloc(&cap_urpc, bytes, &retsize));
+            frame_alloc(&cap_urpc, 2u * BASE_PAGE_SIZE, &retsize));
     } else {
-        retsize = bytes;
+        retsize = 2u * BASE_PAGE_SIZE;
     }
     
     return paging_map_frame(get_current_paging_state(), ret, retsize, cap_urpc,
@@ -34,13 +33,6 @@ void write_to_urpc(void* urpc_buf, genpaddr_t base, gensize_t size,
     if (my_core_id != 0) {
         return;
     }
-
-    // Check if there is data already produced
-    char first_word = *(char*)(urpc_buf);
-    urpc_buf += 2*sizeof(char);
-    char second_word = *(char*)(urpc_buf);
-    *(char*)(urpc_buf) = 'P';
-    urpc_buf += 2*sizeof(char);
 
     *((genpaddr_t*) urpc_buf) = base;
     urpc_buf += sizeof(genpaddr_t);
@@ -100,13 +92,6 @@ errval_t read_from_urpc(void* urpc_buf, struct bootinfo** bi,
     if (my_core_id == 0) {
         return SYS_ERR_OK;
     }
-    char first_word = *(char*)(urpc_buf);
-    urpc_buf += 2*sizeof(char);
-    char second_word = *(char*)(urpc_buf);
-    *(char*)(urpc_buf) = 'P';
-    urpc_buf += 2*sizeof(char);
-     
-    printf("Read: First: %c Second: %c\n", first_word, second_word);
 
     genpaddr_t* base = (genpaddr_t*) urpc_buf;
     urpc_buf += sizeof(genpaddr_t);
@@ -297,7 +282,6 @@ errval_t read_modules(void* urpc_buf, struct bootinfo* bi,
     }
     
     // mmstrings cap, for reading up modules.
-    urpc_buf += 4*sizeof(char);
     urpc_buf += sizeof(genpaddr_t);
     urpc_buf += sizeof(gensize_t);
     urpc_buf = (void*) ROUND_UP((uintptr_t) urpc_buf + sizeof(struct bootinfo), 4);

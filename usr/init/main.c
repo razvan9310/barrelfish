@@ -22,6 +22,7 @@
 #include <aos/paging.h>
 #include <mm/mm.h>
 #include <spawn/spawn.h>
+#include <urpc/urpc.h>
 
 #include "coreboot.h"
 #include "mem_alloc.h"
@@ -74,22 +75,7 @@ int main(int argc, char *argv[])
 
     void* urpc_buf;
     CHECK("mapping URPC frame into vspace",
-            map_urpc_frame_to_vspace(&urpc_buf, 2u * BASE_PAGE_SIZE, my_core_id));
-
-    // Divide buffer into two half: one part for core 0 and other for core 1
-    // Each part is BASE_PAGE_SIZE long
-
-    // Initialize first half of the buffer
-    void *first_half = urpc_buf;
-    *((char*) first_half) = 'C';
-    first_half += 2*sizeof(char);
-    *((char*) first_half) = 'C';
-
-    // Intialize the second half of the buffer
-    void *second_half = (urpc_buf+BASE_PAGE_SIZE);
-    *((char*) second_half) = 'C';
-    second_half += 2*sizeof(char);
-    *((char*) second_half) = 'C';
+            map_urpc_frame_to_vspace(&urpc_buf, my_core_id));
 
     write_to_urpc(urpc_buf, remaining_mem_base, remaining_mem_size, bi,
             my_core_id);
@@ -106,6 +92,9 @@ int main(int argc, char *argv[])
         CHECK("reading modules from URPC",
                 read_modules(urpc_buf, bi, my_core_id));
     }
+
+    // Initialize URPC for subsequent inter-core communication attempts.
+    urpc_init(urpc_buf, my_core_id);
 
     CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
 

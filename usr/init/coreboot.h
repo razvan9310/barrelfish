@@ -22,10 +22,9 @@
 
 /**
  * \brief Maps the frame under cap_urpc to vspace. If "my_core_id" is 0, then
- * this will first allocate a frame of size "bytes" before mapping.
+ * this will first allocate a frame of size BASE_PAGE_SIZE before mapping.
  */
-errval_t map_urpc_frame_to_vspace(void** ret, size_t bytes,
-		coreid_t my_core_id);
+errval_t map_urpc_frame_to_vspace(void** ret, coreid_t my_core_id);
 
 /**
  * \brief Writes the given RAM base and size and struct bootinfo into the shared
@@ -40,18 +39,6 @@ void write_to_urpc(void* urpc_buf, genpaddr_t base, gensize_t size,
  */
 errval_t read_from_urpc(void* urpc_buf, struct bootinfo** bi,
 		coreid_t my_core_id);
-
-// /**
-//  * \brief Writes the given RAM base and size into the shared URPC frame mapped
-//  * at the given urpc_buf.
-//  */
-// void write_ram_region_to_urpc(void* urpc_buf, genpaddr_t base, gensize_t size,
-// 		coreid_t my_core_id);
-
-// /**
-//  * \brief Read memory data from URPC frame and forge a RAM cap to it.
-//  */
-// errval_t forge_ram_cap_from_urpc(void* urpc_buf, coreid_t my_core_id);
 
 /**
  * \brief Starts the core given by "core_to_start".
