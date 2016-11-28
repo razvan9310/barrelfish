@@ -28,11 +28,13 @@
 #define INIT_DISPATCHER_VBASE   (INIT_ARGS_VBASE + ARGS_SIZE)
 #define MON_URPC_VBASE          (INIT_DISPATCHER_VBASE + DISPATCHER_SIZE)
 
-#define INIT_PERM_RO            (ARM_L2_SMALL_CACHEABLE  | \
+#define INIT_PERM_RO            (ARM_L2_SMALL_SHAREABLE  | \
+                                 ARM_L2_SMALL_CACHEABLE  | \
                                  ARM_L2_SMALL_BUFFERABLE | \
                                  ARM_L2_SMALL_USR_RO)
 
-#define INIT_PERM_RW            (ARM_L2_SMALL_CACHEABLE  | \
+#define INIT_PERM_RW            (ARM_L2_SMALL_SHAREABLE  | \
+                                 ARM_L2_SMALL_CACHEABLE  | \
                                  ARM_L2_SMALL_BUFFERABLE | \
                                  ARM_L2_SMALL_USR_RW)
 
