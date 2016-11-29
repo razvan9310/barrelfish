@@ -44,30 +44,42 @@ static inline void urpc_init(void* urpc_buf, coreid_t my_core_id)
 }
 
 /**
+ * \brief Sets the URPC buffer status of a client to URPC_STATUS_NEW_REQUEST.
+ */
+static inline void urpc_mark_request_unread(void* urpc_buf,
+        coreid_t client_core_id)
+{
+    if (client_core_id == 1) {
+        urpc_buf += BASE_PAGE_SIZE;
+    }
+    *((uint32_t*) urpc_buf) = URPC_STATUS_NEW_REQUEST;
+}
+
+/**
  * \brief Writes a new request to the URPC buffer and sets the status to
  * URPC_STATUS_NEW_REQUEST, if current status is URPC_STATUS_CLEAR.
  */
-uint32_t urpc_write_request(void* urpc_buf, coreid_t client_core_id,
+errval_t urpc_write_request(void* urpc_buf, coreid_t client_core_id,
         uint32_t code, size_t msg_len, void* msg);
 
 /**
  * \brief Reads a request from the URPC buffer and sets the status to
  * URPC_STATUS_PROCESSING, if current status is URPC_STATUS_NEW_REQUEST.
  */
-uint32_t urpc_read_request(void* urpc_buf, coreid_t client_core_id,
+errval_t urpc_read_request(void* urpc_buf, coreid_t client_core_id,
         uint32_t* code, size_t* msg_len, void** msg);
 
 /**
  * \brief Writes a new response to the URPC buffer and sets  the status to
  * URPC_STATUS_READY, if current status is URPC_STATUS_PROCESSING.
  */
-uint32_t urpc_write_response(void* urpc_buf, coreid_t client_core_id,
+errval_t urpc_write_response(void* urpc_buf, coreid_t client_core_id,
         uint32_t code, size_t msg_len, void* msg);
 /**
  * \brief Reads a response from the URPC buffer and sets the status to
  * URPC_STATUS_CLEAR, if current status is URPC_STATUS_READY.
  */
-uint32_t urpc_read_response(void* urpc_buf, coreid_t client_core_id,
+errval_t urpc_read_response(void* urpc_buf, coreid_t client_core_id,
         uint32_t* code, size_t* msg_len, void** msg);
 
 #endif /* _INIT_CORE_BOOT_H_ */

@@ -26,7 +26,7 @@
 
 #include "coreboot.h"
 #include "mem_alloc.h"
-#include "rpc_server.h"
+#include "scheduler.h"
 
 coreid_t my_core_id;
 struct bootinfo *bi;
@@ -104,10 +104,6 @@ int main(int argc, char *argv[])
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
     CHECK("COpy to initep", cap_copy(cap_initep, lc->local_cap));
 
-    CHECK("lmp_chan_register_recv child",
-            lmp_chan_register_recv(lc, get_default_waitset(),
-                    MKCLOSURE((void*) local_recv_handler, lc)));
-
     if (my_core_id == 0) {
         // Spawn "Hello" on core 0.
         CHECK("spawning hello",
@@ -115,21 +111,24 @@ int main(int argc, char *argv[])
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
     } else {
         // Spawn "Byebye" on core 1.
-        CHECK("spawning byebye",
-                spawn_load_by_name("byebye",
-                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+        // CHECK("spawning byebye",
+        //         spawn_load_by_name("byebye",
+        //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
     }
 
     debug_printf("Message handler loop\n");
-    // Hang around
-    struct waitset *default_ws = get_default_waitset();
-    while (true) {
-        err = event_dispatch(default_ws);
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "in event_dispatch");
-            abort();
-        }
-    }
+    struct scheduler sc;
+    scheduler_init(&sc, my_core_id, urpc_buf);
+    scheduler_start(&sc, lc);
+    // // Hang around
+    // struct waitset *default_ws = get_default_waitset();
+    // while (true) {
+    //     err = event_dispatch(default_ws);
+    //     if (err_is_fail(err)) {
+    //         DEBUG_ERR(err, "in event_dispatch");
+    //         abort();
+    //     }
+    // }
 
     return EXIT_SUCCESS;
 }

@@ -280,6 +280,10 @@ errval_t aos_rpc_ram_recv_handler(void* void_args)
     // 1) RPC code
     // 2) RAM alloc error code
     // 3) actual returned size, if alloc succeeded.
+    if (msg.buf.msglen != 3) {
+        debug_printf("aos_rpc_ram_recv_handler: invalid msglen %u\n",
+                msg.buf.msglen);
+    }
     assert(msg.buf.msglen >= 3);
 
     if (msg.words[0] == AOS_RPC_OK) {
@@ -633,8 +637,6 @@ errval_t aos_rpc_process_get_name_recv_handler(void* void_args)
                 MKCLOSURE((void*) aos_rpc_process_get_name_recv_handler, args));
     }
 
-    debug_printf("Program name is %u characters long\n", msg.words[0]);
-
     init_rpc->buffer = (char *) malloc(msg.words[0] * sizeof(char));
     size_t rem_length = msg.words[0];
     init_rpc->offset = 0;
@@ -658,9 +660,6 @@ errval_t aos_rpc_process_get_name_recv_handler(void* void_args)
             init_rpc->buffer[4 * i + init_rpc->offset + 3] = (char) (msg.words[i + 1] >> 24); 
         }
     }
-
-    debug_printf("Program name is %s\n", init_rpc->buffer);
-
 
     return (errval_t) msg.words[1];
 }
@@ -705,13 +704,14 @@ errval_t aos_rpc_process_get_process_list_send_handler(void* void_args)
     // TODO: implement functionality to send a number ofer the channel
     // given channel and wait until the ack gets returned.
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    coreid_t* core = (coreid_t*) args[1];
+
 
     errval_t err;
     size_t retries = 0;
     do {
-        err = lmp_chan_send4(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
-                AOS_RPC_GET_PLIST, *((uintptr_t*) args[1]),
-                *((uintptr_t*) args[2]), *((uintptr_t*) args[2]));
+        err = lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                AOS_RPC_GET_PLIST, *core);
         ++retries;
     } while (err_is_fail(err) && retries < 5);
     if (retries == 5) {
@@ -740,8 +740,6 @@ errval_t aos_rpc_process_get_process_list_recv_handler(void* void_args)
         lmp_chan_register_recv(&rpc->lc, rpc->ws,
                 MKCLOSURE((void*) aos_rpc_process_get_name_recv_handler, args));
     }
-
-    debug_printf("Program name is %u characters long\n", msg.words[0]);
 
     size_t rem_length = msg.words[1];
     init_rpc->ps_list = (domainid_t *) malloc(rem_length * sizeof(domainid_t));

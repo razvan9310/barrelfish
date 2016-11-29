@@ -13,9 +13,11 @@
 [ build application { target = "init",
                       cFiles = [
                       	"coreboot.c",
+                        "cross_core_rpc.c",
                         "main.c",
                         "mem_alloc.c",
-                        "rpc_server.c"
+                        "rpc_server.c",
+                        "scheduler.c"
                       ],
                       addLinkFlags = [ "-e _start_init"],
                       addLibraries = [ "urpc", "mm", "getopt", "elf", "spawn" ],

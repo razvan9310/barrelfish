@@ -14,7 +14,7 @@
 
 #include <urpc/urpc.h>
 
-uint32_t urpc_write_request(void* urpc_buf, coreid_t client_core_id,
+errval_t urpc_write_request(void* urpc_buf, coreid_t client_core_id,
         uint32_t code, size_t msg_len, void* msg)
 {
     if (client_core_id == 1) {
@@ -22,18 +22,23 @@ uint32_t urpc_write_request(void* urpc_buf, coreid_t client_core_id,
     }
     uint32_t* status = (uint32_t*) urpc_buf;
     if (*status != URPC_STATUS_CLEAR) {
-        return *status;
+        return URPC_ERR_CHANNEL_STATE;
     }
+
+    __asm volatile ("dmb");
 
     urpc_buf += sizeof(uint32_t);
     *((uint32_t*) urpc_buf) = code;
     urpc_buf += sizeof(uint32_t);
     *((size_t*) urpc_buf) = msg_len;
-    urpc_buf += sizeof(size_t);
-    memcpy(urpc_buf, msg, msg_len);
+    if (msg_len > 0) {
+        urpc_buf += sizeof(size_t);
+        memcpy(urpc_buf, msg, msg_len);
+    }
 
+    __asm volatile ("dmb");
     *status = URPC_STATUS_NEW_REQUEST;
-    return *status;
+    return SYS_ERR_OK;
 }
 
 uint32_t urpc_read_request(void* urpc_buf, coreid_t client_core_id,
@@ -44,18 +49,26 @@ uint32_t urpc_read_request(void* urpc_buf, coreid_t client_core_id,
     }
     uint32_t* status = (uint32_t*) urpc_buf;
     if (*status != URPC_STATUS_NEW_REQUEST) {
-        return *status;
+        return URPC_ERR_CHANNEL_STATE;
     }
+
+    __asm volatile ("dmb");
 
     urpc_buf += sizeof(uint32_t);
     *code = *((uint32_t*) urpc_buf);
     urpc_buf += sizeof(uint32_t);
     *msg_len = *((size_t*) urpc_buf);
-    urpc_buf += sizeof(size_t);
-    memcpy(*msg, urpc_buf, *msg_len);
+    if (*msg_len > 0) {
+        urpc_buf += sizeof(size_t);
+        *msg = malloc(*msg_len);
+        memcpy(*msg, urpc_buf, *msg_len);
+    } else {
+        *msg = NULL;
+    }
 
+    __asm volatile ("dmb");
     *status = URPC_STATUS_PROCESSING;
-    return *status;
+    return SYS_ERR_OK;
 }
 
 uint32_t urpc_write_response(void* urpc_buf, coreid_t client_core_id,
@@ -66,18 +79,23 @@ uint32_t urpc_write_response(void* urpc_buf, coreid_t client_core_id,
     }
     uint32_t* status = (uint32_t*) urpc_buf;
     if (*status != URPC_STATUS_PROCESSING) {
-        return *status;
+        return URPC_ERR_CHANNEL_STATE;
     }
+
+    __asm volatile ("dmb");
 
     urpc_buf += sizeof(uint32_t);
     *((uint32_t*) urpc_buf) = code;
     urpc_buf += sizeof(uint32_t);
     *((size_t*) urpc_buf) = msg_len;
-    urpc_buf += sizeof(size_t);
-    memcpy(urpc_buf, msg, msg_len);;
+    if (msg_len > 0) {
+        urpc_buf += sizeof(size_t);
+        memcpy(urpc_buf, msg, msg_len);
+    }
 
+    __asm volatile ("dmb");
     *status = URPC_STATUS_READY;
-    return *status;
+    return SYS_ERR_OK;
 
 }
 
@@ -89,16 +107,24 @@ uint32_t urpc_read_response(void* urpc_buf, coreid_t client_core_id,
     }
     uint32_t* status = (uint32_t*) urpc_buf;
     if (*status != URPC_STATUS_READY) {
-        return *status;
+        return URPC_ERR_CHANNEL_STATE;
     }
+    
+    __asm volatile ("dmb");
 
     urpc_buf += sizeof(uint32_t);
     *code = *((uint32_t*) urpc_buf);
     urpc_buf += sizeof(uint32_t);
     *msg_len = *((size_t*) urpc_buf);
-    urpc_buf += sizeof(size_t);
-    memcpy(*msg, urpc_buf, *msg_len);
+    if (*msg_len > 0) {
+        urpc_buf += sizeof(size_t);
+        *msg = malloc(*msg_len);
+        memcpy(*msg, urpc_buf, *msg_len);
+    } else {
+        *msg = NULL;
+    }
 
+    __asm volatile ("dmb");
     *status = URPC_STATUS_CLEAR;
-    return *status;
+    return SYS_ERR_OK;
 }

@@ -24,6 +24,16 @@
 
 #define MAX_CLIENT_RAM 128 * 1024 * 1024
 
+// Tracks frames for inter-core communication channel endpoints.
+struct ic_frame_node {
+    struct capref frame;
+    bool free;
+    void* addr;
+
+    struct ic_frame_node* next;
+    struct ic_frame_node* prev;
+};
+
 struct client_state {
     struct lmp_chan lc;  // LMP channel.
     char* str_buf;       // buffer for send_string messages.
@@ -34,6 +44,13 @@ struct client_state {
     size_t spawn_buf_idx;  // current index in process spawn buffer.
 
     struct EndPoint remote_ep;  // Used to identify clients.
+
+    // The two "channel endpoints" for inter-core communication.
+    struct ic_frame_node* client_frame;
+    struct ic_frame_node* server_frame;
+
+    // Whether this client is currently being bound to a remote server.
+    bool binding_in_progress;
 
     // Doubly-linked list.
     struct client_state* next;
@@ -54,7 +71,59 @@ struct system_ps {
  * \brief Returns the client_state instance corresponding to the given client
  * capref.
  */
-struct client_state* identify_client(struct capref* cap);
+struct client_state* identify_client(struct capref* cap,
+        struct client_state* clients);
+
+/**
+ * \brief Serve a request locally (on the current core).
+ */
+errval_t serve_locally(struct lmp_recv_msg* msg, struct capref* client_cap,
+        struct client_state** clients);
+
+/**
+ * \brief Allocates RAM in the given cap, returning the allocated size.
+ */
+errval_t rpc_ram_alloc(struct capref* retcap, size_t size, size_t* retsize);
+/**
+ * \brief Prints a character to terminal output.
+ */
+static inline void rpc_putchar(char* c)
+{
+    sys_print(c, 1);
+}
+/**
+ * \brief Returns a character from terminal input.
+ */
+static inline char rpc_getchar(void)
+{
+    char c;
+    while (true) {
+        sys_getchar(&c);
+        if (c != '\0') {
+            break;
+        }
+    }
+    return c;
+}
+/**
+ * \brief Prints a string to terminal output.
+ */
+static inline void rpc_string(char* string, size_t len)
+{
+    sys_print(string, len);
+}
+/**
+ * \brief Spawns a new process, returning its PID.
+ */
+errval_t rpc_spawn(char* name, domainid_t* pid);
+/**
+ * \brief Returns the name of the process with the given PID.
+ */
+char* rpc_process_name(domainid_t pid, size_t* len);
+/**
+ * \brief Returns the list of active processes on the current core.
+ */
+domainid_t* rpc_process_list(size_t* len);
 
 /**
  * \bief General-purpose local RPC server-side receive handler. This is the
@@ -65,47 +134,48 @@ errval_t local_recv_handler(void* arg);
 /**
  * \brief Processes a new client same-core handshake request.
  */
-void* process_local_handshake_request(struct capref* request_cap);
+void* process_local_handshake_request(struct capref* request_cap,
+        struct client_state** clients);
 /**
  * \brief Processes a client RAM request.
  */
 void* process_local_memory_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap);
+        struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a same-core send number request, potentially for another core.
  */
 void* process_local_number_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap);
+        struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a terminal driver putchar request.
  */
 void* process_local_putchar_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap);
+        struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a terminal driver getchar request.
  */
 void* process_local_getchar_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap);
+        struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a send string request.
  */
 void* process_local_string_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap);
+        struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a same-core spawn new process request.
  */
 void* process_local_spawn_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap);
+        struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a same-core get process name for PID request.
  */
 void* process_local_get_process_name_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap);
+        struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a same-core get processes list request.
  */
 void* process_local_get_process_list_request(struct lmp_recv_msg* msg,
-        struct capref* request_cap);
+        struct capref* request_cap, struct client_state* clients);
 
 /**
  * \brief Handshake response handler.

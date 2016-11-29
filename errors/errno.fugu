@@ -689,6 +689,16 @@ errors libmm MM_ERR_ {
     failure REALLOC_RANGE       "Nested failure in realloc_range()",
 };
 
+// errors in urpc lib
+errors liburpc URPC_ERR_ {
+    failure CHANNEL_STATE   "Wrong URPC channel state for given operation",
+    failure REFILL          "Server failed to process URPC refill request",
+    failure SETUP_CHANNEL   "Server failed to set up an inter-core channel",
+    failure FRAME_BUFFER    "Server ran out of inter-core frame buffer space",
+    failure INVALID_CODE    "Invalid URPC task",
+    failure INVALID_CLIENT  "Invalid client",
+};
+
 // errors in init
 errors init INIT_ERR_ {
     failure SPAWN_MEM_SERV      "Failed to spawn mem_serv",
@@ -715,6 +725,10 @@ errors init INIT_ERR_ {
     failure COPY_IO_CAP         "Failed to copy IO cap to monitor",
     failure COPY_UMP_CAP        "Failed to copy UMP cap to monitor",
     failure NO_MATCHING_RAM_CAP "No suitably-sized RAM cap found when initialising local memory allocator",
+    failure RPC_CHANNEL_STATE   "Wrong RPC channel state for given operation",
+    failure RPC_INVALID_CODE    "Invalid RPC task code",
+    failure RPC_INVALID_STATUS  "Invalid RPC task status",
+    failure RPC_CANNOT_SERVE    "Failed to process RPC request",
 };
 
 //errors in continuation management
