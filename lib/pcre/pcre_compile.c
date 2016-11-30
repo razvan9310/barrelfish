@@ -767,7 +767,7 @@ opcode is used to select the column. The values are as follows:
  16   Right space vs left particular category
  17   Right word vs left particular category
 */
-
+#ifdef SUPPORT_UCP
 static const pcre_uint8 propposstab[PT_TABSIZE][PT_TABSIZE] = {
 /* ANY LAMP GC  PC  SC ALNUM SPACE PXSPACE WORD CLIST UCNC */
   { 0,  0,  0,  0,  0,    0,    0,      0,   0,    0,   0 },  /* PT_ANY */
@@ -817,7 +817,7 @@ static const pcre_uint8 posspropstab[3][4] = {
   { ucp_Z, ucp_Z, ucp_C, ucp_Cc },  /* SPACE and PXSPACE, 2nd value redundant */
   { ucp_L, ucp_N, ucp_P, ucp_Po }   /* WORD */
 };
-
+#endif
 /* This table is used when converting repeating opcodes into possessified
 versions as a result of an explicit possessive quantifier such as ++. A zero
 value means there is no possessified version - in those cases the item in
