@@ -114,6 +114,7 @@ int main(int argc, char *argv[])
         // CHECK("spawning byebye",
         //         spawn_load_by_name("byebye",
         //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+
     }
 
     debug_printf("Message handler loop\n");
