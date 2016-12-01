@@ -818,7 +818,7 @@ errval_t endpoint_create(size_t buflen, struct capref *retcap,
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_SLOT_ALLOC);
     }
-
+    debug_printf("Successfully allocated a slot in endpoint_create\n");
     return lmp_endpoint_create_in_slot(buflen, *retcap, retep);
 }
 

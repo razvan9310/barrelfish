@@ -21,6 +21,7 @@
 #include <aos/morecore.h>
 #include <aos/paging.h>
 #include <mm/mm.h>
+#include <aos/inthandler.h>
 #include <spawn/spawn.h>
 #include <urpc/urpc.h>
 
@@ -96,18 +97,16 @@ int main(int argc, char *argv[])
     // Initialize URPC for subsequent inter-core communication attempts.
     urpc_init(urpc_buf, my_core_id);
 
-    CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
-
     struct lmp_chan* lc = (struct lmp_chan*) malloc(sizeof(struct lmp_chan));
     CHECK("Create channel for parent", lmp_chan_accept(lc, DEFAULT_LMP_BUF_WORDS, NULL_CAP));
 
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
-    CHECK("COpy to initep", cap_copy(cap_initep, lc->local_cap));
-
+    CHECK("Copy to initep", cap_copy(cap_initep, lc->local_cap));
+    
     if (my_core_id == 0) {
         // Spawn "Hello" on core 0.
-        CHECK("spawning hello",
-                spawn_load_by_name("hello",
+        CHECK("spawning bash",
+                spawn_load_by_name("bash",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
     } else {
         // Spawn "Byebye" on core 1.

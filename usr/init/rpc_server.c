@@ -254,7 +254,6 @@ void* process_local_getchar_request(struct lmp_recv_msg* msg,
     // 2. Character returned by sys_getchar
     args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
     *((char*) args) = msg->words[2];
-
     return return_args;
 }
 
@@ -586,21 +585,17 @@ errval_t send_memory(void* args)
 
 errval_t send_serial_getchar(void* args)
 {
-    debug_printf("main.c send_serial_getchar!!\n");
     // 1. Get channel to send down.
     struct lmp_chan* lc = (struct lmp_chan*) args;
 
     // 2. Get returned char.
-    args = (void*) ROUND_UP((uintptr_t) args + sizeof(char), 4);
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
     char* get_char = (char*) args;
 
     // 3. Send response.
     CHECK("lmp_chan_send memory",
             lmp_chan_send2(lc, LMP_FLAG_SYNC, NULL_CAP, AOS_RPC_OK,
                     *get_char));
-
-    // 4. Free args.
-    free(args);
 
     return SYS_ERR_OK;
 }
