@@ -105,15 +105,19 @@ int main(int argc, char *argv[])
     CHECK("COpy to initep", cap_copy(cap_initep, lc->local_cap));
 
     if (my_core_id == 0) {
-        // Spawn "Hello" on core 0.
-        CHECK("spawning hello",
-                spawn_load_by_name("hello",
-                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+        // Spawn "SDMA" on core 0.
+        CHECK("spawning sdma",
+                spawn_load_by_name(
+                        "sdma",
+                        (struct spawninfo*) malloc(sizeof(struct spawninfo)),
+                        my_core_id));
     } else {
         // Spawn "Byebye" on core 1.
         // CHECK("spawning byebye",
-        //         spawn_load_by_name("byebye",
-        //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+        //         spawn_load_by_name(
+        //                 "byebye",
+        //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)),
+        //                 my_core_id));
     }
 
     debug_printf("Message handler loop\n");

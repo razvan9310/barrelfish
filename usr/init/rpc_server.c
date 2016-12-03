@@ -15,6 +15,7 @@
 #include "rpc_server.h"
 
 extern coreid_t my_core_id;
+extern struct bootinfo *bi;
 static domainid_t last_issued_pid = 1;
 
 struct system_ps* ps = NULL;
@@ -85,6 +86,11 @@ errval_t serve_locally(struct lmp_recv_msg* msg, struct capref* cap,
             response = (void*) send_ps_list;
             response_args = process_local_get_process_list_request(
                     msg, cap, *clients);
+            break;
+        case AOS_RPC_DEVICE:
+            response = (void*) send_device_cap;
+            response_args = process_local_device_cap_request(msg, cap,
+                    *clients);
             break;
       
         default:
@@ -528,6 +534,60 @@ void* process_local_get_process_list_request(struct lmp_recv_msg* msg,
     return return_args;
 }
 
+errval_t rpc_device_cap(lpaddr_t base, size_t bytes, struct capref* retcap)
+{
+    struct capref io_cap = {
+        .cnode = cnode_task,
+        .slot = TASKCN_SLOT_IO
+    };
+    struct frame_identity io_cap_id;
+    CHECK("identifying IO frame", frame_identify(io_cap, &io_cap_id));
+
+    CHECK("allocating slot for device cap", slot_alloc(retcap));
+    CHECK("retyping IO cap into device cap",
+            cap_retype(*retcap, io_cap, base - io_cap_id.base,
+                    ObjType_DevFrame, bytes, 1));
+
+    return SYS_ERR_OK;
+}
+
+void* process_local_device_cap_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients)
+{
+    struct client_state* client = identify_client(request_cap, clients);
+    if (client == NULL) {
+        debug_printf("ERROR: process_local_device_cap_request: could not "
+                "identify client\n");
+        return NULL;
+    }
+
+    lpaddr_t base = (lpaddr_t) msg->words[1];
+    size_t bytes = (size_t) msg->words[2];
+    struct capref device_cap;
+
+    errval_t err = rpc_device_cap(base, bytes, &device_cap);
+
+    // Response args.
+    size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(sizeof(errval_t), 4)
+            + ROUND_UP(sizeof(struct capref), 4);
+    void* args = malloc(args_size);
+    void* return_args = args;
+
+    // 1. Channel to send down.
+    *((struct lmp_chan*) args) = client->lc;
+    
+    // 2. Error code from rpc_device_cap.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    *((errval_t*) args) = err;
+
+    // 3. Device cap.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
+    *((struct capref*) args) = device_cap;
+
+    return return_args;
+}
+
 errval_t send_handshake(void* args)
 {
     // 1. Get channel to send down.
@@ -809,4 +869,30 @@ errval_t send_ps_list(void* args)
 
     return err;
 
+}
+
+errval_t send_device_cap(void* args)
+{
+    // 1. Get channel to send down.
+    struct lmp_chan* lc = (struct lmp_chan*) args;
+
+    // 2. Get error code.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    errval_t* err = (errval_t*) args;
+
+    // 3. Get device cap.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
+    struct capref* retcap = (struct capref*) args;
+
+    // 4. Generate response code.
+    size_t code = err_is_fail(*err) ? AOS_RPC_FAILED : AOS_RPC_OK;
+
+    // 5. Send response.
+    CHECK("lmp_chan_send device cap",
+            lmp_chan_send2(lc, LMP_FLAG_SYNC, *retcap, code, (uintptr_t) *err));
+
+    // 7 Free args.
+    free(args);
+
+    return SYS_ERR_OK;
 }

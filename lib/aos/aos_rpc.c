@@ -790,11 +790,80 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
     return SYS_ERR_OK;
 }
 
+errval_t aos_rpc_device_cap_send_handler(void* void_args)
+{
+    uintptr_t* args = (uintptr_t*) void_args;
+
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    lpaddr_t* paddr = (lpaddr_t*) args[1];
+    size_t* bytes = (size_t*) args[2];
+
+    errval_t err;
+    size_t retries = 0;
+    do {
+        err = lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                AOS_RPC_DEVICE, *paddr, *bytes);
+    } while (err_is_fail(err) && retries < 5);
+    if (retries == 5) {
+        return err;
+    }
+
+    return SYS_ERR_OK;
+}
+
+errval_t aos_rpc_device_cap_recv_handler(void* void_args)
+{
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
+    uintptr_t* args = (uintptr_t*) void_args;
+
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    struct capref* retcap = (struct capref*) args[3];
+
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, retcap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_device_cap_recv_handler, args));
+    }
+
+    // We should have received:
+    // 1) RPC code.
+    // 2) Server process error code.
+    assert(msg.buf.msglen == 2);
+
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {
+        debug_printf(" *** performance measurement: aos_rpc_device_cap_recv: "
+                "%u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
+
+    // No need to reregister, we got our device cap (or error).
+    // Return error provided by server.
+    return (errval_t) msg.words[1];
+}
+
 errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc,
                                 lpaddr_t paddr, size_t bytes,
                                 struct capref *frame)
 {
-    return LIB_ERR_NOT_IMPLEMENTED;
+    uintptr_t args[4];
+    args[0] = (uintptr_t) rpc;
+    args[1] = (uintptr_t) &paddr;
+    args[2] = (uintptr_t) &bytes;
+    args[3] = (uintptr_t) frame;
+
+    // Allocate recv slot.
+    CHECK("aos_rpc.c#aos_rpc_get_ram_cap: lmp_chan_alloc_recv_slot",
+            lmp_chan_alloc_recv_slot(&rpc->lc));
+
+    CHECK("aos_rpc.c#aos_rpc_get_device_cap: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(args, aos_rpc_device_cap_send_handler,
+                    aos_rpc_device_cap_recv_handler));
+
+    return SYS_ERR_OK;
 }
 
 /**

@@ -140,6 +140,7 @@ errval_t process_rpc_task(struct scheduler* sc, struct rpc_task* task)
         size_t req_size;
         uint32_t remaining;
         size_t stop;
+
         errval_t err = SYS_ERR_OK;
         switch (task->msg.words[0]) {
             case AOS_RPC_MEMORY:
@@ -923,6 +924,8 @@ bool try_serving_locally(struct scheduler* sc, struct rpc_task* task,
             task->closure.handler(task->closure.arg);
             // lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, msg->words[0]);
             return true;
+        case AOS_RPC_DEVICE:
+            break;
         case AOS_RPC_MEMORY:
         case AOS_RPC_STRING:
         case AOS_RPC_PUTCHAR:

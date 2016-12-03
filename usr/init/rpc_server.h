@@ -124,6 +124,10 @@ char* rpc_process_name(domainid_t pid, size_t* len);
  * \brief Returns the list of active processes on the current core.
  */
 domainid_t* rpc_process_list(size_t* len);
+/**
+ * \brief Returns the DevFrame cap using given base and bytes size.
+ */
+errval_t rpc_device_cap(lpaddr_t base, size_t bytes, struct capref* retcap);
 
 /**
  * \bief General-purpose local RPC server-side receive handler. This is the
@@ -176,6 +180,11 @@ void* process_local_get_process_name_request(struct lmp_recv_msg* msg,
  */
 void* process_local_get_process_list_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients);
+/**
+ * \brief Processes a same-core get device cap request.
+ */
+void* process_local_device_cap_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients);
 
 /**
  * \brief Handshake response handler.
@@ -207,5 +216,9 @@ errval_t send_process_name(void* args);
  * \brief Process list response handler.
  */
 errval_t send_ps_list(void* args);
+/**
+ * \brief Device cap response handler.
+ */
+errval_t send_device_cap(void* args);
 
 #endif /* _INIT_RPC_SERVER_H_ */
