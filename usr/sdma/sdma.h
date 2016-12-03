@@ -16,15 +16,15 @@
 #define _INIT_SDMA_H_
 
 #include <aos/aos_rpc.h>
+#include <aos/inthandler.h>
 #include <dev/omap/omap44xx_sdma_dev.h>
+
+#define SDMA_IRQ_LINE_0 (32 + 12)
 
 struct sdma_driver {
 	// SDMA driver address.
 	lvaddr_t sdma_vaddr;
 	omap44xx_sdma_t sdma_dev;
-
-	// Cap for interrupts.
-	struct capref irq_cap;
 };
 
 /**
@@ -42,7 +42,17 @@ void sdma_initialize_driver(struct sdma_driver* sd);
  */
 static inline errval_t sdma_get_irq_cap(struct sdma_driver* sd)
 {
-	return aos_rpc_get_irq_cap(get_init_rpc(), &sd->irq_cap);
+    return aos_rpc_get_irq_cap(get_init_rpc(), &cap_irq);
+}
+
+/**
+ * \brief SDMA-specific interrupt handler.
+ */
+void sdma_interrupt_handler(void* arg);
+
+static inline errval_t sdma_enable_interrupt(void)
+{
+	return inthandler_setup_arm(sdma_interrupt_handler, NULL, SDMA_IRQ_LINE_0);
 }
 
 #endif /* _INIT_SDMA_H_ */

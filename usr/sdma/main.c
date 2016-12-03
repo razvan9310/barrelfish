@@ -17,5 +17,10 @@ int main(int argc, char** argv)
 		USER_PANIC_ERR(err, "sdma_get_irq_cap failed");
 	}
 
+	err = sdma_enable_interrupt();
+	if (err_is_fail(err)) {
+		USER_PANIC_ERR(err, "sdma_enable_interrupt failed");
+	}
+
 	return 0;
 }

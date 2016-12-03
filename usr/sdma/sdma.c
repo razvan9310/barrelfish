@@ -32,3 +32,8 @@ void sdma_initialize_driver(struct sdma_driver* sd)
     debug_printf("omap44xx_sdma_dma4_revision_rd = 0x%x\n",
             omap44xx_sdma_dma4_revision_rd(&sd->sdma_dev));
 }
+
+void sdma_interrupt_handler(void* arg)
+{
+    debug_printf("!!! Got SDMA interrupt!\n");
+}
