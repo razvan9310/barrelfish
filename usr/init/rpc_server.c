@@ -92,6 +92,10 @@ errval_t serve_locally(struct lmp_recv_msg* msg, struct capref* cap,
             response_args = process_local_device_cap_request(msg, cap,
                     *clients);
             break;
+        case AOS_RPC_IRQ:
+            response = (void*) send_irq_cap;
+            response_args = process_local_irq_cap_request(msg, cap, *clients);
+            break;
       
         default:
             return 1;  // TODO: More meaning plz
@@ -588,6 +592,40 @@ void* process_local_device_cap_request(struct lmp_recv_msg* msg,
     return return_args;
 }
 
+void* process_local_irq_cap_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients)
+{
+   struct client_state* client = identify_client(request_cap, clients);
+    if (client == NULL) {
+        debug_printf("ERROR: process_local_irq_cap_request: could not "
+                "identify client\n");
+        return NULL;
+    }
+
+    struct capref irq_cap;
+    errval_t err = rpc_irq_cap(&irq_cap);
+
+    // Response args.
+    size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(sizeof(errval_t), 4)
+            + ROUND_UP(sizeof(struct capref), 4);
+    void* args = malloc(args_size);
+    void* return_args = args;
+
+    // 1. Channel to send down.
+    *((struct lmp_chan*) args) = client->lc;
+    
+    // 2. Error code from rpc_irq_cap.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    *((errval_t*) args) = err;
+
+    // 3. IRQ cap.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
+    *((struct capref*) args) = irq_cap;
+
+    return return_args;
+}
+
 errval_t send_handshake(void* args)
 {
     // 1. Get channel to send down.
@@ -892,6 +930,32 @@ errval_t send_device_cap(void* args)
             lmp_chan_send2(lc, LMP_FLAG_SYNC, *retcap, code, (uintptr_t) *err));
 
     // 7 Free args.
+    free(args);
+
+    return SYS_ERR_OK;
+}
+
+errval_t send_irq_cap(void* args)
+{
+    //1. Get channel to send down.
+    struct lmp_chan* lc = (struct lmp_chan*) args;
+
+    // 2. Get error code.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    errval_t* err = (errval_t*) args;
+
+    // 3. Get IRQ cap.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
+    struct capref* retcap = (struct capref*) args;
+
+    // 4. Generate response code.
+    size_t code = err_is_fail(*err) ? AOS_RPC_FAILED : AOS_RPC_OK;
+
+    // 5. Send response.
+    CHECK("lmp_chan_send irq cap",
+            lmp_chan_send2(lc, LMP_FLAG_SYNC, *retcap, code, *err));
+
+    // 6. Free args.
     free(args);
 
     return SYS_ERR_OK;

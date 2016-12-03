@@ -12,6 +12,7 @@
 
 [ build application { target = "sdma",
                       cFiles = [
+                      	"main.c",
                       	"sdma.c"
                       ],
                       addLinkFlags = [ "-e _start"],

@@ -925,6 +925,8 @@ bool try_serving_locally(struct scheduler* sc, struct rpc_task* task,
             // lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, msg->words[0]);
             return true;
         case AOS_RPC_DEVICE:
+        case AOS_RPC_IRQ:
+            // These are always core-local.
             break;
         case AOS_RPC_MEMORY:
         case AOS_RPC_STRING:

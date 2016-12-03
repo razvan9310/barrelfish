@@ -29,6 +29,7 @@
 #define AOS_RPC_GET_PLIST  1 << 19  // ID for get process name requests.
 #define AOS_RPC_GETCHAR    1 << 21  // ID for getchar requests.
 #define AOS_RPC_DEVICE     1 << 23  // ID for get device cap requests.
+#define AOS_RPC_IRQ         1 << 27  // ID for get IRQ cap requests.
 
 
 struct aos_rpc {
@@ -60,6 +61,8 @@ errval_t aos_rpc_serial_getchar_send_handler(void* void_args);
 errval_t aos_rpc_serial_getchar_recv_handler(void* void_args);
 errval_t aos_rpc_device_cap_send_handler(void* void_args);
 errval_t aos_rpc_device_cap_recv_handler(void* void_args);
+errval_t aos_rpc_irq_send_handler(void* void_args);
+errval_t aos_rpc_irq_recv_handler(void* void_args);
 
 /**
  * \brief send a number over the given channel
@@ -134,6 +137,11 @@ errval_t aos_rpc_send_and_receive(uintptr_t* args, void* send_handler,
  */
 errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc, lpaddr_t paddr, size_t bytes,
                                 struct capref *frame);
+/**
+ * \brief Gets an interrupt (IRQ) capability.
+ */
+errval_t aos_rpc_get_irq_cap(struct aos_rpc* rpc, struct capref* retcap);
+
 /**
  * \brief Initialize given rpc channel.
  * TODO: you may want to change the inteface of your init function, depending
