@@ -17,8 +17,8 @@
 
 #include <aos/aos.h>
 
-#define AOS_RPC_OK 0              // General-purpose OK message.
-#define AOS_RPC_FAILED 1          // RPC failure.
+#define AOS_RPC_OK         0       // General-purpose OK message.
+#define AOS_RPC_FAILED     1       // RPC failure.
 #define AOS_RPC_HANDSHAKE  1 << 2  // Message passed at handshake time.
 #define AOS_RPC_MEMORY     1 << 3  // ID for memory requests.
 #define AOS_RPC_NUMBER     1 << 5  // ID for send number requests.
@@ -27,8 +27,9 @@
 #define AOS_RPC_SPAWN      1 << 13 // ID for process spawn requests.
 #define AOS_RPC_GET_PNAME  1 << 15 // ID for get process name requests.
 #define AOS_RPC_GET_PLIST  1 << 19 // ID for get process name requests.
-#define AOS_RPC_GETCHAR    1 << 21    // ID for getchar requests.
-
+#define AOS_RPC_GETCHAR    1 << 21 // ID for getchar requests.
+#define AOS_RPC_LIGHT_LED  1 << 4  // ID for light_led requests.
+#define AOS_RPC_MEMTEST  1 << 6  // ID for memtest requests.
 
 struct aos_rpc {
     struct lmp_chan lc;
@@ -57,6 +58,9 @@ errval_t aos_rpc_process_get_process_list_send_handler(void* void_args);
 errval_t aos_rpc_process_get_process_list_recv_handler(void* void_args);
 errval_t aos_rpc_serial_getchar_send_handler(void* void_args);
 errval_t aos_rpc_serial_getchar_recv_handler(void* void_args);
+errval_t aos_rpc_light_led_send_handler(void* void_args);
+errval_t aos_rpc_light_led_recv_handler(void* void_args);
+
 
 /**
  * \brief send a number over the given channel
@@ -76,6 +80,11 @@ errval_t aos_rpc_send_string(struct aos_rpc *chan, const char *string,
  */
 errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t bytes,
         struct capref *retcap, size_t *ret_bytes);
+
+/**
+ * \brief get one character from the serial port
+ */
+errval_t aos_rpc_light_led(struct aos_rpc *chan, int status);
 
 /**
  * \brief get one character from the serial port

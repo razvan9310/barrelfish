@@ -75,6 +75,7 @@ static struct thread_mutex thread_slabs_mutex = THREAD_MUTEX_INITIALIZER;
 static void *tls_block_init_base;
 static size_t tls_block_init_len;
 static size_t tls_block_total_len;
+static uint32_t tid = 0;
 
 /// Warning already issued about RSP usage.  (Prevent repeated warnings
 /// from the same domain -- e.g., when using THC whose stacks appear
@@ -84,10 +85,13 @@ __attribute__((unused)) static bool stack_warned=0;
 /// Wrapper function for most threads, runs given function then deletes itself
 static void thread_entry(thread_func_t start_func, void *start_data)
 {
+    debug_printf("I am in thread_entry!!\n");
     assert((lvaddr_t)start_func >= BASE_PAGE_SIZE);
     int retval = start_func(start_data);
+    debug_printf("After start function!!\n");
     thread_exit(retval);
     assert(!"thread_exit returned");
+    debug_printf("I am out thread_entry!!");
 }
 
 #ifndef NDEBUG
@@ -250,6 +254,7 @@ static void thread_init(dispatcher_handle_t disp, struct thread *newthread)
     newthread->token_number = 1;
 
     newthread->rpc_in_progress = false;
+    newthread->id = tid++;
     newthread->async_error = SYS_ERR_OK;
 }
 
@@ -394,7 +399,7 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
         free(stack);
         return NULL;
     }
-
+    debug_printf("Allocated space for threadTCB\n");
     // split space into TLS data followed by TCB
     // XXX: this layout is specific to the x86 ABIs! once other (saner)
     // architectures support TLS, we'll need to break out the logic.
@@ -442,7 +447,7 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
     newthread->stack_top = (char *)newthread->stack_top
         - (lvaddr_t)newthread->stack_top % STACK_ALIGNMENT;
 
-    paging_init_onthread(newthread);
+    //paging_init_onthread(newthread);
 
     // init registers
     registers_set_initial(&newthread->regs, newthread, (lvaddr_t)thread_entry,
@@ -464,15 +469,20 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
 struct thread *thread_create_varstack(thread_func_t start_func, void *arg,
                                       size_t stacksize)
 {
+    debug_printf("Inside thread_create_varstack\n");
     struct thread *newthread = thread_create_unrunnable(start_func, arg, stacksize);
+    debug_printf("After thread_create_varstack\n");
     if (newthread) {
         // enqueue on runq
         dispatcher_handle_t handle = disp_disable();
         struct dispatcher_generic *disp_gen = get_dispatcher_generic(handle);
         newthread->disp = handle;
+        // thread_set_id(tid);
+        // tid++;
         thread_enqueue(newthread, &disp_gen->runq);
         disp_enable(handle);
     }
+    debug_printf("Success Thread creation\n");
     return newthread;
 }
 
@@ -607,6 +617,7 @@ uintptr_t thread_get_id(struct thread *t)
 void thread_set_id(uintptr_t id)
 {
     struct thread *me = thread_self();
+    debug_printf("THread id is %d\n", id);
     me->id = id;
 }
 

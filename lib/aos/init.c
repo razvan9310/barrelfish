@@ -85,14 +85,13 @@ static size_t syscall_terminal_write(const char *buf, size_t len)
     return 0;
 }
 
-static size_t aos_terminal_write(const char* buf, size_t len)
-{
-    if (len > 0) {
-        debug_printf("init.c: calling aos_rpc_send_string\n");
-        return aos_rpc_send_string(get_init_rpc(), buf, 0);
-    }
-    return 0;
-}
+// static size_t aos_terminal_write(const char* buf, size_t len)
+// {
+//     if (len > 0) {
+//         return aos_rpc_send_string(get_init_rpc(), buf, 0);
+//     }
+//     return 0;
+// }
 
 static size_t syscall_terminal_read(char *buf, size_t len)
 {
@@ -112,7 +111,7 @@ void barrelfish_libc_glue_init(void)
     // what we need for that
     // TODO: change these to use the user-space serial driver if possible
     _libc_terminal_read_func = init_domain ? syscall_terminal_read : aos_terminal_read;
-    _libc_terminal_write_func = init_domain ? syscall_terminal_write : aos_terminal_write;
+    _libc_terminal_write_func = syscall_terminal_write;
     _libc_exit_func = libc_exit;
     _libc_assert_func = libc_assert;
     /* morecore func is setup by morecore_init() */
@@ -205,11 +204,6 @@ void default_exception_handler(enum exception_type type, int subtype,
     }
 }
 
-void terminal_read_handler(void *params);
-void terminal_read_handler(void *params)
-{
-    printf("We got an interrupt for a character\n");
-}
 /** \brief Initialise libbarrelfish.
  *
  * This runs on a thread in every domain, after the dispatcher is setup but
@@ -268,14 +262,6 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
 
     // init domains only get partial init
     if (init_domain) {
-        CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, 
-                cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
-
-        // Install Handler for getting char from terminal
-        CHECK("init.c#barrelfish_init_onthread: inthandler_setup_arm\n", 
-            inthandler_setup_arm((interrupt_handler_fn) terminal_read_handler, 
-                            NULL,
-                            37));
         return SYS_ERR_OK;
     }
 
@@ -285,9 +271,9 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // Set domain init rpc.
     set_init_rpc(&rpc);
     debug_printf("init.c: successfully setup connection with init\n");
-    char *a = malloc(sizeof(char));
-    aos_terminal_read(a, 1);
-    printf("Hello I am trying to read via aos_terminal_read: %s\n", a);
+    // char *a = malloc(sizeof(char));
+    // aos_terminal_read(a, 1);
+    // debug_printf("Hello I am trying to read via aos_terminal_read: %s\n", a);
     // right now we don't have the nameservice & don't need the terminal
     // and domain spanning, so we return here
     return SYS_ERR_OK;

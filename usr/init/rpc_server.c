@@ -47,6 +47,7 @@ errval_t serve_locally(struct lmp_recv_msg* msg, struct capref* cap,
     void* response;
     void* response_args;
 
+    //debug_printf("Word is : %d\n", msg->words[0]);
     switch (msg->words[0]) {
         case AOS_RPC_HANDSHAKE:
             response = (void*) send_handshake;
@@ -68,6 +69,11 @@ errval_t serve_locally(struct lmp_recv_msg* msg, struct capref* cap,
             response = (void*) send_serial_getchar;
             response_args = process_local_getchar_request(msg, cap, *clients);
             break;
+        case AOS_RPC_LIGHT_LED:
+            debug_printf("I am light led function.\n");
+            response = (void*) send_simple_ok;
+            response_args = process_local_light_led_request(msg, cap, *clients);
+            break;
         case AOS_RPC_STRING:
             response = (void*) send_simple_ok;
             response_args = process_local_string_request(msg, cap, *clients);
@@ -88,6 +94,7 @@ errval_t serve_locally(struct lmp_recv_msg* msg, struct capref* cap,
             break;
       
         default:
+            //debug_printf("Value of words is : %d\n", msg->words[0]);
             return 1;  // TODO: More meaning plz
     }
 
@@ -223,6 +230,25 @@ void* process_local_putchar_request(struct lmp_recv_msg* msg,
     struct client_state* client = identify_client(request_cap, clients);
     if (client == NULL) {
         debug_printf("ERROR: process_local_putchar_request: could not idetify client");
+        return NULL;
+    }
+
+    // Return chanel for response handler.
+    return (void*) &client->lc;
+}
+
+void* process_local_light_led_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients)
+{
+    // Light Led.
+    debug_printf("aos_rpc.c#aos_rpc_serial_light_led\n");
+    debug_printf("Value of status is %d\n", ((int) msg->words[1]));
+    rpc_light_led(((int) msg->words[1]));
+
+    // Identify client.
+    struct client_state* client = identify_client(request_cap, clients);
+    if (client == NULL) {
+        debug_printf("ERROR: process_local_light_led_request: could not idetify client");
         return NULL;
     }
 
@@ -401,7 +427,6 @@ void* process_local_spawn_request(struct lmp_recv_msg* msg,
         return return_args;
 
     } else {
-        debug_printf("In else statement\n");
         size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4);
 
         void* args = malloc(args_size);
@@ -449,7 +474,6 @@ char* rpc_process_name(domainid_t pid, size_t* len)
 void* process_local_get_process_name_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients)
 {
-    debug_printf("Server received pid %u\n", (uint32_t) msg->words[2]);
     domainid_t pid = (domainid_t) msg->words[2];
 
     // Identify client.
@@ -576,9 +600,6 @@ errval_t send_memory(void* args)
     CHECK("lmp_chan_send memory",
             lmp_chan_send3(lc, LMP_FLAG_SYNC, *retcap, code, (uintptr_t) *err,
                     *size));
-
-    // 7 Free args.
-    free(args);
 
     return SYS_ERR_OK;
 }

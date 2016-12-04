@@ -44,6 +44,7 @@ struct interrupt_handler_state {
 
 static void generic_interrupt_handler(void *arg)
 {
+    printf("I am in generic_interrupt_handler!\n");
     struct interrupt_handler_state *state = arg;
     errval_t err;
 

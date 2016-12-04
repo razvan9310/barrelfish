@@ -23,6 +23,7 @@
 #include <spawn/spawn.h>
 
 #define MAX_CLIENT_RAM 128 * 1024 * 1024
+#define LED_BIT 8
 
 // Tracks frames for inter-core communication channel endpoints.
 struct ic_frame_node {
@@ -91,6 +92,42 @@ static inline void rpc_putchar(char* c)
 {
     sys_print(c, 1);
 }
+
+static inline void rpc_light_led(int status)
+{
+    // Forge frame for the led memory segment
+    struct capref led_cap;
+    errval_t err;
+    void *ret;
+    //size_t retsize = 8; 
+    genpaddr_t start = (genpaddr_t) 0x4A310000;
+
+    // 1. Allocate some slot for led_cap
+    err = slot_alloc(&led_cap);
+    DEBUG_ERR(err, "allocating slot for led_cap");
+
+    // 2. Forge frame from kernel
+    err = frame_forge(led_cap, start, BASE_PAGE_SIZE, 0);
+    DEBUG_ERR(err, "forging out_enab");
+
+    struct frame_identity ret1;
+    err = frame_identify(led_cap, &ret1);
+    DEBUG_ERR(err, "identify frame for led_cap");
+
+    debug_printf("Slot of new cap is: %d base: %ld size: %ld\n", led_cap.slot, ret1.base, ret1.bytes);
+    // 3. Map led_cap frame to our pagetable
+    err = paging_map_frame(get_current_paging_state(), &ret, BASE_PAGE_SIZE, led_cap,
+            NULL, NULL);
+    DEBUG_ERR(err, "ERROR in mapping page for led_cap");
+    
+    volatile int * out_enab = (int *)(ret + 0x134);
+    volatile int * dataout  = (int *)(ret + 0x138);
+    int mask = 1 << LED_BIT;
+    *out_enab &= ~(mask);
+    if(status == 1)
+        *dataout ^= mask;
+}
+
 /**
  * \brief Returns a character from terminal input.
  */
@@ -155,6 +192,11 @@ void* process_local_putchar_request(struct lmp_recv_msg* msg,
  * \brief Processes a terminal driver getchar request.
  */
 void* process_local_getchar_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients);
+/**
+ * \brief Processes a terminal driver getchar request.
+ */
+void* process_local_light_led_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a send string request.

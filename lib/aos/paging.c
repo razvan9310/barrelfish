@@ -131,9 +131,97 @@ errval_t paging_init(void)
 /**
  * \brief Initialize per-thread paging state
  */
+static void handle_pagefault(int subtype,
+        void* addr,
+        arch_registers_state_t* regs,
+        arch_registers_fpu_state_t* fpuregs)
+{
+    // TODO(razvan): What should be done based on subtype, regs, fpuregs?
+
+    lvaddr_t vaddr = (lvaddr_t) addr;
+    
+    if (vaddr < BASE_PAGE_SIZE) {
+        debug_printf("Thread attempted to dereference NULL-reserved memory at"
+                "%u, killing it\n", vaddr);
+        thread_exit(THREAD_EXIT_PAGEFAULT);
+    }
+
+    if (vaddr >= KERNEL_WINDOW) {
+        // This is not the heap, kill the thread.
+        debug_printf("Thread attempted to access non-heap address %u,"
+                "killing it\n", vaddr);
+        thread_exit(THREAD_EXIT_PAGEFAULT);
+    }
+
+    vaddr -= vaddr % BASE_PAGE_SIZE;
+
+    struct paging_state* st = get_current_paging_state();
+
+    if (!is_vregion_claimed(st, vaddr)) {
+        // Some other thread has already allocated this?
+        debug_printf("Pagefault handler: page at %u has not been claimed yet\n",
+                vaddr);
+        thread_exit(THREAD_EXIT_PAGEFAULT);
+    }
+
+    errval_t err;
+    if (paging_should_refill_slabs(st)) {
+        // Should first refill paging slabs before attempting to map.
+        err = paging_refill_slabs(st);
+        if (err_is_fail(err)) {
+            debug_printf("Pagefault handler erred during paging_refill_slabs:"
+                    "%s\n", err_getstring(err));
+            thread_exit(THREAD_EXIT_PAGEFAULT);
+        }
+    }
+
+    struct capref frame;
+    size_t retsize;
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, &retsize);
+    if (err_is_fail(err)) {
+        debug_printf("Pagefault handler erred during frame_alloc: %s\n",
+                err_getstring(err));
+        thread_exit(THREAD_EXIT_PAGEFAULT);
+    }
+
+    err = paging_map_fixed(get_current_paging_state(), vaddr, frame, retsize);
+    if (err_is_fail(err)) {
+        debug_printf("Pagefault handler erred during paging_map_fixed: %s\n",
+                err_getstring(err));
+        // TODO(razvan): free frame before killing thread.
+        thread_exit(THREAD_EXIT_PAGEFAULT);
+    }
+}
+
+static void default_exception_handler(enum exception_type type, int subtype,
+        void *addr, arch_registers_state_t *regs,
+        arch_registers_fpu_state_t *fpuregs)
+{
+    switch (type) {
+        case EXCEPT_PAGEFAULT:
+            handle_pagefault(subtype, addr, regs, fpuregs);
+            break;
+        default:
+            debug_printf("Unhandled exception type %d. Killing thread.\n",
+                    type);
+            thread_exit(THREAD_EXIT_UNHANDLED_EXCEPTION);
+    }
+}
+
 void paging_init_onthread(struct thread *t)
 {
     // TODO (M4): setup exception handler for thread `t'.
+    static char stack_base[8192 * 4] = {0};
+    char* stack_top = stack_base + 8192 * 2;
+    t->exception_stack = (void *) stack_base;
+    t->exception_stack_top = (void *) stack_top;
+    t->exception_handler = (exception_handler_fn) default_exception_handler;
+    // CHECK("init.c#barrelfish_init_onthread: thread_set_exception_handler (2)",
+    //         thread_set_exception_handler(
+    //                 (exception_handler_fn) default_exception_handler,
+    //                 NULL,
+    //                 (void*) stack_base, (void*) stack_top,
+    //                 NULL, NULL));
 }
 
 /**

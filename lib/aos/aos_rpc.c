@@ -332,8 +332,6 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t request_bytes,
 
 errval_t aos_rpc_serial_getchar_send_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
 
     uintptr_t* args = (uintptr_t*) void_args;
 
@@ -342,21 +340,12 @@ errval_t aos_rpc_serial_getchar_send_handler(void* void_args)
 
     lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
                    AOS_RPC_GETCHAR, (uintptr_t) to_get);
-
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_getchar_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
-
-   return SYS_ERR_OK;
+   
+    return SYS_ERR_OK;
 }
 
 errval_t aos_rpc_serial_getchar_recv_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
-
     uintptr_t* args = (uintptr_t*) void_args;
 
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
@@ -374,12 +363,6 @@ errval_t aos_rpc_serial_getchar_recv_handler(void* void_args)
     assert(msg.words[0] == AOS_RPC_OK);
     char* to_get = (char*) args[1];
     *to_get = msg.words[1];
-
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_getchar_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
 
     return SYS_ERR_OK;
 }
@@ -399,6 +382,57 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *chan, char *retc)
     return SYS_ERR_OK;
 }
 
+errval_t aos_rpc_light_led_send_handler(void* void_args)
+{
+
+    uintptr_t* args = (uintptr_t*) void_args;
+
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    int status = (int) args[1];
+
+    lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                   AOS_RPC_LIGHT_LED, (uintptr_t) status);
+
+    debug_printf("Instruction: %d\n", AOS_RPC_LIGHT_LED);
+   
+    return SYS_ERR_OK;
+}
+
+errval_t aos_rpc_light_led_recv_handler(void* void_args)
+{
+    uintptr_t* args = (uintptr_t*) void_args;
+
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    struct capref cap;
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister.
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_light_led_recv_handler, args));
+    }
+    // This should be an ACK only.
+    assert(msg.buf.msglen == 1);
+    assert(msg.words[0] == AOS_RPC_OK);
+
+    return SYS_ERR_OK;
+}
+
+errval_t aos_rpc_light_led(struct aos_rpc *chan, int status)
+{
+    // TODO implement functionality to request a character from
+    // the serial driver.
+    uintptr_t args[2];
+    args[0] = (uintptr_t) (chan);
+    args[1] = (uintptr_t) (status);
+
+    CHECK("aos_rpc.c#aos_rpc_serial_light_led: aos_rpc_send_and_receive",
+           aos_rpc_send_and_receive(args, aos_rpc_light_led_send_handler,
+                   aos_rpc_light_led_recv_handler));
+
+    return SYS_ERR_OK;
+}
 
 errval_t aos_rpc_serial_putchar(struct aos_rpc *chan, char c)
 {
@@ -415,9 +449,6 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *chan, char c)
 
 errval_t aos_rpc_putchar_send_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
-
     uintptr_t* args = (uintptr_t*) void_args;
 
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
@@ -434,20 +465,11 @@ errval_t aos_rpc_putchar_send_handler(void* void_args)
         return err;
     }
 
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_putchar_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
-
    return SYS_ERR_OK;
 }
 
 errval_t aos_rpc_putchar_recv_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
-
     uintptr_t* args = (uintptr_t*) void_args;
 
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
@@ -464,12 +486,6 @@ errval_t aos_rpc_putchar_recv_handler(void* void_args)
     // This should be an ACK only.
     assert(msg.buf.msglen == 1);
     assert(msg.words[0] == AOS_RPC_OK);
-
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_putchar_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
 
     return SYS_ERR_OK;
 }
@@ -686,13 +702,6 @@ errval_t aos_rpc_process_get_name(struct aos_rpc* chan, domainid_t pid,
     *name = (char*) malloc(strlen(get_init_rpc()->buffer) * sizeof(char));
     strncpy(*name, get_init_rpc()->buffer, strlen(get_init_rpc()->buffer)); //(char*) malloc(args[2] * sizeof(char));
 
-
-    // Free args.
-    free((size_t*) args[2]);
-    free((domainid_t*) args[1]);
-    free((struct aos_rpc*) args[0]);
-    free(args);
-
     return SYS_ERR_OK;
 }
 
@@ -705,7 +714,6 @@ errval_t aos_rpc_process_get_process_list_send_handler(void* void_args)
     // given channel and wait until the ack gets returned.
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
     coreid_t* core = (coreid_t*) args[1];
-
 
     errval_t err;
     size_t retries = 0;
@@ -783,7 +791,7 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
 
 
     *pids = (domainid_t*) malloc(get_init_rpc()->ps_offset * sizeof(domainid_t));
-    memcpy(*pids, get_init_rpc()->ps_list, get_init_rpc()->ps_offset); //(char*) malloc(args[2] * sizeof(char));
+    memcpy(*pids, get_init_rpc()->ps_list, get_init_rpc()->ps_offset*sizeof(domainid_t)); //(char*) malloc(args[2] * sizeof(char));
 
     *pid_count = get_init_rpc()->ps_offset;
 

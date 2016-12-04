@@ -32,6 +32,23 @@
 coreid_t my_core_id;
 struct bootinfo *bi;
 
+static char c;
+void terminal_read_handler(void *params);
+void terminal_read_handler(void *params)
+{
+    debug_printf("I am in terminal_read_handler!!");
+    sys_getchar(&c);
+
+    debug_printf("%c\n", c);
+    debug_printf("We got an interrupt for a character\n");
+}
+
+
+// static void pesudo_task(void)
+// {
+//     debug_printf("Hello World\n");
+// }
+
 int main(int argc, char *argv[])
 {
     errval_t err;
@@ -82,7 +99,7 @@ int main(int argc, char *argv[])
             my_core_id);
     CHECK("forging RAM cap & retrieving bi from URPC frame",
             read_from_urpc(urpc_buf, &bi, my_core_id));
-    CHECK("start core 1", start_core(1, my_core_id, bi));
+    //CHECK("start core 1", start_core(1, my_core_id, bi));
 
     if (my_core_id == 1) {
         err = initialize_ram_alloc(&remaining_mem_base, &remaining_mem_size);
@@ -96,6 +113,8 @@ int main(int argc, char *argv[])
 
     // Initialize URPC for subsequent inter-core communication attempts.
     urpc_init(urpc_buf, my_core_id);
+    CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, 
+            cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
 
     struct lmp_chan* lc = (struct lmp_chan*) malloc(sizeof(struct lmp_chan));
     CHECK("Create channel for parent", lmp_chan_accept(lc, DEFAULT_LMP_BUF_WORDS, NULL_CAP));
@@ -103,6 +122,13 @@ int main(int argc, char *argv[])
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
     CHECK("Copy to initep", cap_copy(cap_initep, lc->local_cap));
     
+    // Install Handler for getting char from terminal
+    // CHECK("init.c#barrelfish_init_onthread: inthandler_setup_arm\n", 
+    //     inthandler_setup_arm(terminal_read_handler, 
+    //                     NULL,
+    //                     106));
+    // struct thread *t = thread_create((thread_func_t) pesudo_task, NULL);
+    // thread_join(t, NULL);
     if (my_core_id == 0) {
         // Spawn "Hello" on core 0.
         CHECK("spawning bash",
@@ -114,7 +140,9 @@ int main(int argc, char *argv[])
         //         spawn_load_by_name("byebye",
         //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
     }
+    // while(true) {
 
+    // }
     debug_printf("Message handler loop\n");
     struct scheduler sc;
     scheduler_init(&sc, my_core_id, urpc_buf);
