@@ -705,6 +705,13 @@ errors liburpc URPC_ERR_ {
     failure INVALID_CLIENT  "Invalid client",
 };
 
+// errors in sdma lib
+errors libsdma SDMA_ERR_ {
+    failure MISALIGNED  "Misaligned address for SDMA",
+    failure SUPERVISOR  "SDMA supervisor error",
+    failure TRANSFER    "SDMA transfer error",
+};
+
 // errors in init
 errors init INIT_ERR_ {
     failure SPAWN_MEM_SERV      "Failed to spawn mem_serv",
