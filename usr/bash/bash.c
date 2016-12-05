@@ -151,6 +151,7 @@ void handle_cat(char *argc[], int argv)
 	fclose(fp);
 	string[size] = 0;
 	printf("%s\n", string);
+	fclose(fp);
 }
 
 void handle_wc(char *argc[], int argv)
@@ -183,6 +184,7 @@ void handle_wc(char *argc[], int argv)
 
     printf("Lines, Words, Characters\n");
     printf(" %3d %3d %3d\n", tot_lines, tot_words, tot_chars);
+    fclose(fp);
 }
 int	grep(char*, FILE*, char*);
 int	match(char*, char*);

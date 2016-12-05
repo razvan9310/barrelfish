@@ -25,9 +25,6 @@ uint32_t perf_measurement_get_counter(void);
  */
 errval_t aos_rpc_send_number_send_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
-
     uintptr_t* args = (uintptr_t*) void_args;
 
     // TODO: implement functionality to send a number ofer the channel
@@ -47,12 +44,6 @@ errval_t aos_rpc_send_number_send_handler(void* void_args)
         return err;
     }
 
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_send_number_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
-
     return SYS_ERR_OK;
 }
 
@@ -61,8 +52,6 @@ errval_t aos_rpc_send_number_send_handler(void* void_args)
  */
 errval_t aos_rpc_send_number_recv_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
 
     uintptr_t* args = (uintptr_t*) void_args;
 
@@ -81,13 +70,6 @@ errval_t aos_rpc_send_number_recv_handler(void* void_args)
 
     assert(msg.words[0] == AOS_RPC_OK);
     // No need to reregister, we got our RAM.
-
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_send_number_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
-
     return err;
 }
 
@@ -222,8 +204,6 @@ errval_t aos_rpc_send_string(struct aos_rpc* chan, const char* string,
  */
 errval_t aos_rpc_ram_send_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
 
     uintptr_t* args = (uintptr_t*) void_args;
 
@@ -244,11 +224,6 @@ errval_t aos_rpc_ram_send_handler(void* void_args)
         return err;
     }
 
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_ram_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
     return SYS_ERR_OK;
 }
 
@@ -257,9 +232,6 @@ errval_t aos_rpc_ram_send_handler(void* void_args)
  */
 errval_t aos_rpc_ram_recv_handler(void* void_args)
 {
-   // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
-
     uintptr_t* args = (uintptr_t*) void_args;
 
     // 1. aos_rpc
@@ -290,12 +262,6 @@ errval_t aos_rpc_ram_recv_handler(void* void_args)
         // Fill in returnd size.
         size_t* retsize = (size_t*) args[3];
         *retsize = msg.words[2];
-    }
-
-   // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_ram_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     // No need to reregister, we got our RAM.
@@ -810,8 +776,6 @@ errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc,
  */
 errval_t aos_rpc_handshake_send_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
 
     uintptr_t* args = (uintptr_t*) void_args;
 
@@ -822,12 +786,6 @@ errval_t aos_rpc_handshake_send_handler(void* void_args)
                 AOS_RPC_HANDSHAKE);
     } while (err_is_fail(err));
 
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_handshake_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
-
     return SYS_ERR_OK;
 }
 
@@ -836,9 +794,6 @@ errval_t aos_rpc_handshake_send_handler(void* void_args)
  */
 errval_t aos_rpc_handshake_recv_handler(void* void_args)
 {
-    // 0. get cycle counter value
-    uint32_t cycle_counter_begin = perf_measurement_get_counter();
-
     uintptr_t* args = (uintptr_t*) void_args;
 
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
@@ -855,12 +810,6 @@ errval_t aos_rpc_handshake_recv_handler(void* void_args)
     // We should have an ACK.
     assert(msg.buf.msglen == 1);
     assert(msg.words[0] == AOS_RPC_OK);
-
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_handshake_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
 
     // No need to rereister here, as handshake is complete;
     return err;
