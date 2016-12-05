@@ -26,6 +26,9 @@ char *wd;
 uint64_t max_len_wd = 20;
 uint64_t pos_wd = 0;
 
+// BIG TODO: CHANGE ALL FUNCTION DEFINITION TO ERRVAL_T
+// Better error handling mechanisms
+
 void handle_echo(char *argc[], int argv)
 {
 	// TODO: Handle ("")
@@ -75,10 +78,13 @@ void handle_threads(char *argc[], int argv)
 
 void handle_memtest(char *argc[], int argv)
 {
-	struct capref cap;
 	size_t size = atoi(argc[1]);
-	size_t retsize;
-	aos_rpc_get_ram_cap(get_init_rpc(), size, &cap, &retsize);
+	char *a =  malloc(size);
+	for(int i=0; i<size; i++) {
+		*a = 'J';
+	}
+	printf("Result of memtest\n");
+	printf("%s\n", a);
 }
 
 void handle_light_led(char *argc[], int argv)
@@ -149,15 +155,111 @@ void handle_cat(char *argc[], int argv)
 
 void handle_wc(char *argc[], int argv)
 {
+	FILE *fp;
+	fp = fopen(argc[1], "r");
+	int tot_chars = 0;     /* total characters */
+    int tot_lines = 0;     /* total lines */
+    int tot_words = 0;     /* total words */
+    int in_space = 1;
+    int c, last = '\n';
 
+    while ((c = fgetc(fp)) != EOF) {
+        last = c;
+        tot_chars++;
+        if (is_space(c)) {
+            in_space = 1;
+            if (c == '\n' || c == '\r') {
+                tot_lines++;
+            }
+        } else {
+            tot_words += in_space;
+            in_space = 0;
+        }
+    }
+    if (last != '\n' || last == '\r') {
+        /* count last line if not linefeed terminated */
+        tot_lines++;
+    }
+
+    printf("Lines, Words, Characters\n");
+    printf(" %3d %3d %3d\n", tot_lines, tot_words, tot_chars);
+}
+int	grep(char*, FILE*, char*);
+int	match(char*, char*);
+int	matchhere(char*, char*);
+int	matchstar(int, char*, char*);
+
+/* grep: search for regexp in file */
+int grep(char *regexp, FILE *f, char *name)
+{
+	int n, nmatch;
+	char buf[1024];
+
+	nmatch = 0;
+	while (fgets(buf, sizeof buf, f) != NULL) {
+		n = strlen(buf);
+		if (n > 0 && buf[n-1] == '\n')
+			buf[n-1] = '\0';
+		if (match(regexp, buf)) {
+			nmatch++;
+			if (name != NULL)
+				printf("%s:", name);
+			printf("%s\n", buf);
+		}
+	}
+	return nmatch;
+}
+
+/* matchhere: search for regexp at beginning of text */
+int matchhere(char *regexp, char *text)
+{
+	if (regexp[0] == '\0')
+		return 1;
+	if (regexp[1] == '*')
+		return matchstar(regexp[0], regexp+2, text);
+	if (regexp[0] == '$' && regexp[1] == '\0')
+		return *text == '\0';
+	if (*text!='\0' && (regexp[0]=='.' || regexp[0]==*text))
+		return matchhere(regexp+1, text+1);
+	return 0;
+}
+
+/* match: search for regexp anywhere in text */
+int match(char *regexp, char *text)
+{
+	if (regexp[0] == '^')
+		return matchhere(regexp+1, text);
+	do {	/* must look even if string is empty */
+		if (matchhere(regexp, text))
+			return 1;
+	} while (*text++ != '\0');
+	return 0;
+}
+
+/* matchstar: search for c*regexp at beginning of text */
+int matchstar(int c, char *regexp, char *text)
+{
+	do {	/* a * matches zero or more instances */
+		if (matchhere(regexp, text))
+			return 1;
+	} while (*text != '\0' && (*text++ == c || c == '.'));
+	return 0;
 }
 
 void handle_grep(char *argc[], int argv)
 {
-
+	FILE *fp;
+	fp = fopen(argc[2], "r");
+	grep(argc[1], fp, NULL);
+	fclose(fp);
 }
 
 void handle_oncore(char *argc[], int argv)
+{
+
+}
+
+void handle_help(char *argc[], int argv)
 {
 
 }
@@ -214,8 +316,9 @@ void execute_command(char *argc[], int argv)
 		- [OK] cd
 		- [OK] ls
 		- [OK] cat
-		- wc
-		- grep
+		- [Ok] wc
+		- [OK] grep
+		- [OK] mkdir
 	*/
 	if(strncmp(argc[0], "echo", 4) == 0) {
 		handle_echo(argc, argv);
@@ -226,11 +329,11 @@ void execute_command(char *argc[], int argv)
 	}else if(strcmp(argc[0], "memtest") == 0){
 		handle_memtest(argc, argv);
 	}else if(strcmp(argc[0], "oncore") == 0){
-
+		handle_oncore(argc, argv);
 	}else if(strcmp(argc[0], "ps") == 0){
 		handle_ps(argc, argv);
 	}else if(strcmp(argc[0], "help") == 0){
-
+		handle_help(argc, argv);
 	}else if(strcmp(argc[0], "pwd") == 0){
 		handle_pwd(argc, argv);
 	}else if(strcmp(argc[0], "cd") == 0){

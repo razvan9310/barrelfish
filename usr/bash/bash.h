@@ -30,6 +30,7 @@ void handle_cd(char *argc[], int argv);
 void handle_wc(char *argc[], int argv);
 void handle_grep(char *argc[], int argv);
 void handle_oncore(char *argc[], int argv);
+void handle_help(char *argc[], int argv);
 bool is_space(char c);
 void sanitize_input(char *);
 void execute_command(char **argc, int argv);
