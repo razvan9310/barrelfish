@@ -93,7 +93,7 @@ static inline void rpc_putchar(char* c)
     sys_print(c, 1);
 }
 
-static inline void rpc_light_led(void)
+static inline void rpc_light_led(uint32_t status)
 {
     // Forge frame for the led memory segment
     struct capref led_cap;
@@ -124,7 +124,12 @@ static inline void rpc_light_led(void)
     volatile int * dataout  = (int *)(ret + 0x13C);
     int mask = 1 << LED_BIT;
     *out_enab &= ~(mask);
-    *dataout ^= mask;
+    if(status == 1) {
+        *dataout = mask;
+    }
+    else if(status == 2) {
+        *dataout = 0;
+    }
 }
 
 /**

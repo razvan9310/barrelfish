@@ -91,9 +91,9 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t bytes,
         struct capref *retcap, size_t *ret_bytes);
 
 /**
- * \brief get one character from the serial port
+ * \brief turn on/offf led on pandaboard
  */
-errval_t aos_rpc_light_led(struct aos_rpc *chan);
+errval_t aos_rpc_light_led(struct aos_rpc *chan, uintptr_t status, coreid_t core);
 
 /**
  * \brief get one character from the serial port

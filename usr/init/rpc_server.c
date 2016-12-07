@@ -251,7 +251,8 @@ void* process_local_putchar_request(struct lmp_recv_msg* msg,
 void* process_local_light_led_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients)
 {
-    rpc_light_led();
+    // Print what we got.
+    rpc_light_led((uint32_t) msg->words[2]);
 
     // Identify client.
     struct client_state* client = identify_client(request_cap, clients);
@@ -376,38 +377,38 @@ errval_t rpc_spawn(char* name, domainid_t* pid)
 
 errval_t rpc_spawn_args(struct capref* proc_info, domainid_t* pid)
 {
-    if (strcmp(name, "init") == 0) {
-        return SPAWN_ERR_FIND_SPAWNDS;
-    }
+    // if (strcmp(name, "init") == 0) {
+    //     return SPAWN_ERR_FIND_SPAWNDS;
+    // }
 
-    struct system_ps* new_ps = (struct system_ps*) malloc(
-            sizeof(struct system_ps));
-    if (ps == NULL) {
-        new_ps->next = new_ps->prev = NULL;
-        new_ps->curr_size = 1;
-    } else {
-        ps->prev = new_ps;
-        new_ps->curr_size = ps->curr_size+1;
-        new_ps->next = ps;
-        new_ps->prev = NULL;
-    }
+    // struct system_ps* new_ps = (struct system_ps*) malloc(
+    //         sizeof(struct system_ps));
+    // if (ps == NULL) {
+    //     new_ps->next = new_ps->prev = NULL;
+    //     new_ps->curr_size = 1;
+    // } else {
+    //     ps->prev = new_ps;
+    //     new_ps->curr_size = ps->curr_size+1;
+    //     new_ps->next = ps;
+    //     new_ps->prev = NULL;
+    // }
 
-    //Set process pid
-    new_ps->pid = last_issued_pid++;
+    // //Set process pid
+    // new_ps->pid = last_issued_pid++;
 
-    //Spawn process and fill spawinfo
-    CHECK("RPC spawning process",
-            spawn_load_by_name(name,
-                    (struct spawninfo*) malloc(sizeof(struct spawninfo)),
-                    my_core_id));
+    // //Spawn process and fill spawinfo
+    // CHECK("RPC spawning process",
+    //         spawn_load_by_name(name,
+    //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)),
+    //                 my_core_id));
     
-    //ps->process = process_local_info;
-    new_ps->name = (char*) malloc(strlen(name) * sizeof(char));
-    strcpy(new_ps->name, name);
-    //Add process to process list
-    ps = new_ps;
+    // //ps->process = process_local_info;
+    // new_ps->name = (char*) malloc(strlen(name) * sizeof(char));
+    // strcpy(new_ps->name, name);
+    // //Add process to process list
+    // ps = new_ps;
 
-    *pid = new_ps->pid;
+    // *pid = new_ps->pid;
 
     return SYS_ERR_OK;
 }

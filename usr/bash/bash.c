@@ -31,6 +31,8 @@ uint64_t max_len_wd = 20;     // Current Max Length of working directory
 uint64_t pos_wd = 0;		  // Current Length of working directory
 uint64_t buf_size = 16;		  // Buffer size of input array
 uint64_t pos = 0;			  // Current size of buffer array
+uint32_t inputRedirect = 0;   // Input Redirection Bit
+uint32_t outputRedirect = 0;  // Output Redirection Bit
 
 // BIG TODO: CHANGE ALL FUNCTION DEFINITION TO ERRVAL_T
 // Better error handling mechanisms
@@ -54,6 +56,8 @@ void clean_buffer(void)
 {
 	free(input);
 	pos = 0;
+	inputRedirect = 0;
+	outputRedirect = 0;
 	buf_size = 16;
 	input = malloc(buf_size);
 }
@@ -172,7 +176,11 @@ void handle_memtest(char *argc[], int argv)
 
 errval_t handle_light_led(char *argc[], int argv)
 {
-	errval_t err = aos_rpc_light_led(get_init_rpc());
+	uintptr_t status = 0;
+	coreid_t core = 0;
+	if(strncmp(argc[1], "on", 2) == 0) status = 1;
+	else if(strncmp(argc[1], "off", 3) == 0) status = 2;
+	errval_t err = aos_rpc_light_led(get_init_rpc(), status, core);
 	return err;
 }
 
@@ -393,6 +401,17 @@ void sanitize_input(char *ip)
 			ip[i-1] = '\0';
 	}
 	aos_rpc_serial_putchar(get_init_rpc(), '\n');
+	for(int j=0; j<argv; j++) {
+		if(strncmp(argc[j], "<", 1) == 0) {
+			inputRedirect = 1;
+		}else if(strncmp(argc[j], "<<", 2) == 0) {
+			inputRedirect = 2;
+		}else if(strncmp(argc[j], ">", 1) == 0) {
+			outputRedirect = 1;
+		}else if(strncmp(argc[j], ">>", 1) == 0) {
+			outputRedirect = 2;
+		}
+	}
 	execute_command(argc, argv);
 	clean_buffer();
 	printf("\n");

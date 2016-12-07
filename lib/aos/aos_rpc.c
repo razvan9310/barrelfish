@@ -350,23 +350,25 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *chan, char *retc)
 
 errval_t aos_rpc_light_led_send_handler(void* void_args)
 {
-
     uintptr_t* args = (uintptr_t*) void_args;
 
+    // TODO: implement functionality to send a number ofer the channel
+    // given channel and wait until the ack gets returned.
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    uintptr_t* number = (uintptr_t*) args[1];
+    coreid_t* core = (coreid_t*) args[2];
 
-     // 5. Perform send.
     errval_t err;
     size_t retries = 0;
     do {
-        err = lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
-                   AOS_RPC_LIGHT_LED);
+        err = lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                AOS_RPC_LIGHT_LED, *core, *number);
         ++retries;
     } while (err_is_fail(err) && retries < 5);
     if (retries == 5) {
         return err;
     }
-   
+
     return SYS_ERR_OK;
 }
 
@@ -384,23 +386,26 @@ errval_t aos_rpc_light_led_recv_handler(void* void_args)
         lmp_chan_register_recv(&rpc->lc, rpc->ws,
                 MKCLOSURE((void*) aos_rpc_light_led_recv_handler, args));
     }
-    // This should be an ACK only.
-    assert(msg.buf.msglen == 1);
-    assert(msg.words[0] == AOS_RPC_OK);
 
-    return SYS_ERR_OK;
+    assert(msg.buf.msglen == 1);
+
+    assert(msg.words[0] == AOS_RPC_OK);
+    // No need to reregister, we got our RAM.
+    return err;
 }
 
-errval_t aos_rpc_light_led(struct aos_rpc *chan)
+errval_t aos_rpc_light_led(struct aos_rpc *chan, uintptr_t status, coreid_t core)
 {
-    // TODO implement functionality to request a character from
-    // the serial driver.
-    uintptr_t args[1];
-    args[0] = (uintptr_t) (chan);
+    // TODO: implement functionality to send a number ofer the channel
+    // given channel and wait until the ack gets returned.
+    uintptr_t args[3];
+    args[0] = (uintptr_t) chan;
+    args[1] = (uintptr_t) &status;
+    args[2] = (uintptr_t) &core;
 
-    CHECK("aos_rpc.c#aos_rpc_serial_light_led: aos_rpc_send_and_receive",
-           aos_rpc_send_and_receive(args, aos_rpc_light_led_send_handler,
-                   aos_rpc_light_led_recv_handler));
+    CHECK("aos_rpc.c#aos_rpc_send_number: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(args, aos_rpc_light_led_send_handler,
+                    aos_rpc_light_led_recv_handler));
 
     return SYS_ERR_OK;
 }
