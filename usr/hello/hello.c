@@ -24,7 +24,7 @@
 
 int main(int argc, char *argv[])
 {
-	debug_printf("RPC: Trying to spawn bybye process on core 1\n");
+	debug_printf("Hello from hello process\n");
 
 	// domainid_t pid;
 
@@ -63,10 +63,7 @@ int main(int argc, char *argv[])
  //    }
  //    debug_printf("byebye 2 has pid %u\n", pid);*/
 
-    
 
-    printf("Hello, world! (this is printed by hello)\n");
-    
     // char* c = (char*) malloc(128 * 1024 * 1024);
     // *c = 'H';
     // sys_debug_flush_cache();

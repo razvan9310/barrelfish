@@ -354,12 +354,18 @@ errval_t aos_rpc_light_led_send_handler(void* void_args)
     uintptr_t* args = (uintptr_t*) void_args;
 
     struct aos_rpc* rpc = (struct aos_rpc*) args[0];
-    int status = (int) args[1];
 
-    lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
-                   AOS_RPC_LIGHT_LED, (uintptr_t) status);
-
-    debug_printf("Instruction: %d\n", AOS_RPC_LIGHT_LED);
+     // 5. Perform send.
+    errval_t err;
+    size_t retries = 0;
+    do {
+        err = lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                   AOS_RPC_LIGHT_LED);
+        ++retries;
+    } while (err_is_fail(err) && retries < 5);
+    if (retries == 5) {
+        return err;
+    }
    
     return SYS_ERR_OK;
 }
@@ -385,13 +391,12 @@ errval_t aos_rpc_light_led_recv_handler(void* void_args)
     return SYS_ERR_OK;
 }
 
-errval_t aos_rpc_light_led(struct aos_rpc *chan, int status)
+errval_t aos_rpc_light_led(struct aos_rpc *chan)
 {
     // TODO implement functionality to request a character from
     // the serial driver.
-    uintptr_t args[2];
+    uintptr_t args[1];
     args[0] = (uintptr_t) (chan);
-    args[1] = (uintptr_t) (status);
 
     CHECK("aos_rpc.c#aos_rpc_serial_light_led: aos_rpc_send_and_receive",
            aos_rpc_send_and_receive(args, aos_rpc_light_led_send_handler,
@@ -570,6 +575,76 @@ errval_t aos_rpc_process_spawn(struct aos_rpc *chan, char *name,
 
     //TODO: Free args
 
+    return SYS_ERR_OK;
+}
+
+/**
+ * \brief Process spawn request.
+ */
+errval_t aos_rpc_process_spawn_args_send_handler(void* void_args) 
+{
+    uintptr_t* args = (uintptr_t*) void_args;
+    
+    // TODO: implement functionality to send a number ofer the channel
+    // given channel and wait until the ack gets returned.
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    //coreid_t* core = (coreid_t*) args[1];
+
+    errval_t err;
+    size_t retries = 0;
+    do {
+        err = lmp_chan_send4(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                AOS_RPC_SPAWN_ARGS,
+                *((uintptr_t*) args[1]),*((uintptr_t*) args[2]), 
+                *((uintptr_t*) args[3]));
+        ++retries;
+    } while (err_is_fail(err) && retries < 5);
+    if (retries == 5) {
+        return err;
+    }
+
+    return SYS_ERR_OK;
+}
+
+/**
+ * \brief Process spawn response.
+ */
+errval_t aos_rpc_process_spawn_args_recv_handler(void* void_args)
+{
+    uintptr_t* args = (uintptr_t*) void_args;
+    
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    //for implicit cap minitng
+    struct capref cap;
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister.
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_process_spawn_args_recv_handler, args));
+    }
+
+    *((domainid_t*) args[2]) = msg.words[2];
+
+    return (errval_t) msg.words[1];
+}
+
+errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, struct capref* proc_info,
+                                    coreid_t core, domainid_t *newpid)
+{
+    uintptr_t args[4];
+    args[0] = (uintptr_t) chan;
+    args[1] = (uintptr_t) &core;
+    args[2] = (uintptr_t) proc_info;
+    args[3] = (uintptr_t) newpid;
+
+    debug_printf("Slot of proc_info %d core: %d\n", proc_info->slot, core);
+    CHECK("aos_rpc.c#aos_rpc_process_spawn: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(args, aos_rpc_process_spawn_args_send_handler,
+                    aos_rpc_process_spawn_args_recv_handler));
+
+    *newpid = *(domainid_t*) args[2];
     return SYS_ERR_OK;
 }
 
@@ -764,11 +839,167 @@ errval_t aos_rpc_process_get_all_pids(struct aos_rpc *chan,
     return SYS_ERR_OK;
 }
 
+errval_t aos_rpc_device_cap_send_handler(void* void_args)
+{
+    uintptr_t* args = (uintptr_t*) void_args;
+
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    lpaddr_t* paddr = (lpaddr_t*) args[1];
+    size_t* bytes = (size_t*) args[2];
+
+    errval_t err;
+    size_t retries = 0;
+    do {
+        err = lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                AOS_RPC_DEVICE, *paddr, *bytes);
+    } while (err_is_fail(err) && retries < 5);
+    if (retries == 5) {
+        return err;
+    }
+
+    return SYS_ERR_OK;
+}
+
+errval_t aos_rpc_device_cap_recv_handler(void* void_args)
+{
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
+    uintptr_t* args = (uintptr_t*) void_args;
+
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    struct capref* retcap = (struct capref*) args[3];
+
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, retcap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_device_cap_recv_handler, args));
+    }
+
+    // We should have received:
+    // 1) RPC code.
+    // 2) Server process error code.
+    assert(msg.buf.msglen == 2);
+
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {
+        debug_printf(" *** performance measurement: aos_rpc_device_cap_recv: "
+                "%u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
+
+    // No need to reregister, we got our device cap (or error).
+    // Return error provided by server.
+    return (errval_t) msg.words[1];
+}
+
 errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc,
                                 lpaddr_t paddr, size_t bytes,
                                 struct capref *frame)
 {
-    return LIB_ERR_NOT_IMPLEMENTED;
+    uintptr_t args[4];
+    args[0] = (uintptr_t) rpc;
+    args[1] = (uintptr_t) &paddr;
+    args[2] = (uintptr_t) &bytes;
+    args[3] = (uintptr_t) frame;
+
+    // Allocate recv slot.
+    CHECK("aos_rpc.c#aos_rpc_get_ram_cap: lmp_chan_alloc_recv_slot",
+            lmp_chan_alloc_recv_slot(&rpc->lc));
+
+    CHECK("aos_rpc.c#aos_rpc_get_device_cap: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(args, aos_rpc_device_cap_send_handler,
+                    aos_rpc_device_cap_recv_handler));
+
+    return SYS_ERR_OK;
+}
+
+errval_t aos_rpc_irq_send_handler(void* void_args)
+{
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
+    uintptr_t* args = (uintptr_t*) void_args;
+
+    struct aos_rpc *rpc = (struct aos_rpc*) args[0];
+
+    errval_t err;
+    size_t retries = 0;
+    do {
+        err = lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+                    AOS_RPC_IRQ);
+        ++retries;
+    } while (err_is_fail(err) && retries < 5);
+    if (retries == 5) {
+        return err;
+    }
+
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_irq_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
+    return SYS_ERR_OK;
+}
+
+errval_t aos_rpc_irq_recv_handler(void* void_args)
+{
+    uint32_t cycle_counter_begin = perf_measurement_get_counter();
+
+    uintptr_t* args = (uintptr_t*) void_args;
+
+    // 1. aos_rpc
+    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    // 2. retcap
+    struct capref* retcap = (struct capref*) args[1];
+
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, retcap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        // Reregister.
+        lmp_chan_register_recv(&rpc->lc, rpc->ws,
+                MKCLOSURE((void*) aos_rpc_irq_recv_handler, args));
+    }
+
+    // We should have received:
+    // 1) RPC code
+    // 2) Any meaningful error code from the server-side operations.
+    if (msg.buf.msglen != 2) {
+        debug_printf("aos_rpc_irq_recv_handler: invalid msglen %u\n",
+                msg.buf.msglen);
+    }
+    assert(msg.buf.msglen >= 2);
+
+    uint32_t cycle_counter_end = perf_measurement_get_counter();
+    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
+        debug_printf(" *** performance measurement: aos_rpc_irq_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+    }
+
+    // No need to reregister, we got our RAM.
+    // Will return error provided by server.
+    return (errval_t) msg.words[1];
+}
+
+errval_t aos_rpc_get_irq_cap(struct aos_rpc* rpc, struct capref* retcap)
+{
+    // Fill in args.
+    // 1. aos_rpc channel
+    // 2. retcap
+    uintptr_t args[4];
+    args[0] = (uintptr_t) rpc;
+    args[1] = (uintptr_t) retcap;
+
+    // Allocate recv slot.
+    CHECK("aos_rpc.c#aos_rpc_get_irq_cap: lmp_chan_alloc_recv_slot",
+            lmp_chan_alloc_recv_slot(&rpc->lc));
+
+    // Perform RPC. On success, this will make the provided capref pointer point
+    // to the newly provided IRQ cap.
+    CHECK("aos_rpc.c#aos_rpc_get_irq_cap: aos_rpc_send_and_receive",
+            aos_rpc_send_and_receive(args, aos_rpc_irq_send_handler,
+                    aos_rpc_irq_recv_handler));
+
+    return SYS_ERR_OK;
 }
 
 /**

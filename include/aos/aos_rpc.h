@@ -28,8 +28,11 @@
 #define AOS_RPC_GET_PNAME  1 << 15 // ID for get process name requests.
 #define AOS_RPC_GET_PLIST  1 << 19 // ID for get process name requests.
 #define AOS_RPC_GETCHAR    1 << 21 // ID for getchar requests.
+#define AOS_RPC_DEVICE     1 << 23  // ID for get device cap requests.
+#define AOS_RPC_IRQ        1 << 27  // ID for get IRQ cap requests.
 #define AOS_RPC_LIGHT_LED  1 << 4  // ID for light_led requests.
-#define AOS_RPC_MEMTEST  1 << 6  // ID for memtest requests.
+#define AOS_RPC_MEMTEST    1 << 6  // ID for memtest requests.
+#define AOS_RPC_SPAWN_ARGS 1 << 8  // ID for memtest requests.
 
 struct aos_rpc {
     struct lmp_chan lc;
@@ -52,6 +55,8 @@ errval_t aos_rpc_ram_send_handler(void* void_args);
 errval_t aos_rpc_ram_recv_handler(void* void_args);
 errval_t aos_rpc_process_spawn_send_handler(void* void_args);
 errval_t aos_rpc_process_spawn_recv_handler(void* void_args);
+errval_t aos_rpc_process_spawn_args_send_handler(void* void_args);
+errval_t aos_rpc_process_spawn_args_recv_handler(void* void_args);
 errval_t aos_rpc_process_get_name_send_handler(void* void_args);
 errval_t aos_rpc_process_get_name_recv_handler(void* void_args);
 errval_t aos_rpc_process_get_process_list_send_handler(void* void_args);
@@ -60,6 +65,10 @@ errval_t aos_rpc_serial_getchar_send_handler(void* void_args);
 errval_t aos_rpc_serial_getchar_recv_handler(void* void_args);
 errval_t aos_rpc_light_led_send_handler(void* void_args);
 errval_t aos_rpc_light_led_recv_handler(void* void_args);
+errval_t aos_rpc_device_cap_send_handler(void* void_args);
+errval_t aos_rpc_device_cap_recv_handler(void* void_args);
+errval_t aos_rpc_irq_send_handler(void* void_args);
+errval_t aos_rpc_irq_recv_handler(void* void_args);
 
 
 /**
@@ -84,7 +93,7 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t bytes,
 /**
  * \brief get one character from the serial port
  */
-errval_t aos_rpc_light_led(struct aos_rpc *chan, int status);
+errval_t aos_rpc_light_led(struct aos_rpc *chan);
 
 /**
  * \brief get one character from the serial port
@@ -104,6 +113,17 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *chan, char c);
  */
 errval_t aos_rpc_process_spawn(struct aos_rpc *chan, char *name,
         coreid_t core, domainid_t *newpid);
+
+/**
+ * \brief Request process manager to start a new process with arguments
+ * \arg name the name of the process that needs to be spawned (without a
+ *           path prefix)
+ * \arg argc count of the arguments
+ * \arg argv array storing the values of arguments
+ * \arg newpid the process id of the newly spawned process
+ */
+errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, struct capref *proc_info,
+                                    coreid_t core, domainid_t *newpid);
 
 /**
  * \brief Get name of process with id pid.
@@ -140,6 +160,11 @@ errval_t aos_rpc_send_and_receive(uintptr_t* args, void* send_handler,
  */
 errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc, lpaddr_t paddr, size_t bytes,
                                 struct capref *frame);
+
+/**
+ * \brief Gets an interrupt (IRQ) capability.
+ */
+errval_t aos_rpc_get_irq_cap(struct aos_rpc* rpc, struct capref* retcap);
 /**
  * \brief Initialize given rpc channel.
  * TODO: you may want to change the inteface of your init function, depending

@@ -88,10 +88,10 @@ static void thread_entry(thread_func_t start_func, void *start_data)
     debug_printf("I am in thread_entry!!\n");
     assert((lvaddr_t)start_func >= BASE_PAGE_SIZE);
     int retval = start_func(start_data);
-    debug_printf("After start function!!\n");
+    debug_printf("After start function\n");
     thread_exit(retval);
     assert(!"thread_exit returned");
-    debug_printf("I am out thread_entry!!");
+    debug_printf("I am out of thread_entry!!\n");
 }
 
 #ifndef NDEBUG
@@ -230,6 +230,7 @@ static errval_t refill_thread_slabs(struct slab_allocator *slabs)
 static void thread_init(dispatcher_handle_t disp, struct thread *newthread)
 {
     newthread->self = newthread;
+    paging_init_onthread(newthread);
 #ifndef NDEBUG
     newthread->next = newthread->prev = NULL;
 #endif
@@ -252,7 +253,7 @@ static void thread_init(dispatcher_handle_t disp, struct thread *newthread)
     newthread->slab = NULL;
     newthread->token = 0;
     newthread->token_number = 1;
-
+    //paging_init_onthread(newthread);
     newthread->rpc_in_progress = false;
     newthread->id = tid++;
     newthread->async_error = SYS_ERR_OK;
@@ -382,12 +383,9 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
                                         size_t stacksize)
 {
     // allocate stack
+    debug_printf("&@&!&!!&!& I am in thread_create_unrunnable\n");
     assert((stacksize % sizeof(uintptr_t)) == 0);
-    void *stack = malloc(stacksize);
-    if (stack == NULL) {
-        return NULL;
-    }
-
+    debug_printf("After malloc in thread_create_unrunnable\n");
     // allocate space for TCB + initial TLS data
     // no mutex as it may deadlock: see comment for thread_slabs_spinlock
     // thread_mutex_lock(&thread_slabs_mutex);
@@ -396,10 +394,9 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
     release_spinlock(&thread_slabs_spinlock);
     // thread_mutex_unlock(&thread_slabs_mutex);
     if (space == NULL) {
-        free(stack);
+        //free(stack);
         return NULL;
     }
-    debug_printf("Allocated space for threadTCB\n");
     // split space into TLS data followed by TCB
     // XXX: this layout is specific to the x86 ABIs! once other (saner)
     // architectures support TLS, we'll need to break out the logic.
@@ -439,6 +436,11 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
     }
 #endif
 
+    paging_init_onthread(newthread);
+    void *stack = malloc(stacksize);
+    if (stack == NULL) {
+        return NULL;
+    }
     // init stack
     newthread->stack = stack;
     newthread->stack_top = (char *)stack + stacksize;
@@ -446,8 +448,6 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
     // waste space for alignment, if malloc gave us an unaligned stack
     newthread->stack_top = (char *)newthread->stack_top
         - (lvaddr_t)newthread->stack_top % STACK_ALIGNMENT;
-
-    //paging_init_onthread(newthread);
 
     // init registers
     registers_set_initial(&newthread->regs, newthread, (lvaddr_t)thread_entry,
@@ -471,14 +471,12 @@ struct thread *thread_create_varstack(thread_func_t start_func, void *arg,
 {
     debug_printf("Inside thread_create_varstack\n");
     struct thread *newthread = thread_create_unrunnable(start_func, arg, stacksize);
-    debug_printf("After thread_create_varstack\n");
     if (newthread) {
         // enqueue on runq
+        debug_printf("@!*!**!*!*! It's a newthread\n");
         dispatcher_handle_t handle = disp_disable();
         struct dispatcher_generic *disp_gen = get_dispatcher_generic(handle);
         newthread->disp = handle;
-        // thread_set_id(tid);
-        // tid++;
         thread_enqueue(newthread, &disp_gen->runq);
         disp_enable(handle);
     }
@@ -617,7 +615,6 @@ uintptr_t thread_get_id(struct thread *t)
 void thread_set_id(uintptr_t id)
 {
     struct thread *me = thread_self();
-    debug_printf("THread id is %d\n", id);
     me->id = id;
 }
 
@@ -1135,7 +1132,7 @@ static int bootstrap_thread(struct spawn_domain_params *params)
     }
     slab_init(&thread_slabs, blocksize, refill_thread_slabs);
 
-    if (init_domain_global || true) {
+    if (init_domain_global) {
         // run main() on this thread, since we can't allocate
         if (tls_block_total_len > 0) {
             USER_PANIC("unsupported: use of TLS data in bootstrap domain\n");
@@ -1162,6 +1159,7 @@ static int bootstrap_thread(struct spawn_domain_params *params)
  */
 void thread_init_disabled(dispatcher_handle_t handle, bool init_domain)
 {
+    debug_printf("!!!!@@@@@@ I am in thread_init_disabled %d\n", handle);
     struct dispatcher_shared_generic *disp =
         get_dispatcher_shared_generic(handle);
     struct dispatcher_generic *disp_gen = get_dispatcher_generic(handle);
@@ -1389,7 +1387,6 @@ errval_t thread_set_exception_handler(exception_handler_fn newhandler,
                                       void **old_stack_base, void **old_stack_top)
 {
     struct thread *me = thread_self();
-
     if (oldhandler != NULL) {
         *oldhandler = me->exception_handler;
     }
@@ -1417,7 +1414,7 @@ static void exception_handler_wrapper(arch_registers_state_t *cpuframe,
                                       uintptr_t hack_arg, void *addr)
 {
     struct thread *me = thread_self();
-
+    //debug_printf("************* I am in exception_handler_wrapper %d\n", me->disp);
     assert(me->in_exception);
     assert(me->exception_handler != NULL);
 

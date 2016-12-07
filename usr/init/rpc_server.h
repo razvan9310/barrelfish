@@ -93,7 +93,7 @@ static inline void rpc_putchar(char* c)
     sys_print(c, 1);
 }
 
-static inline void rpc_light_led(int status)
+static inline void rpc_light_led(void)
 {
     // Forge frame for the led memory segment
     struct capref led_cap;
@@ -104,28 +104,27 @@ static inline void rpc_light_led(int status)
 
     // 1. Allocate some slot for led_cap
     err = slot_alloc(&led_cap);
-    DEBUG_ERR(err, "allocating slot for led_cap");
+    //DEBUG_ERR(err, "allocating slot for led_cap");
 
     // 2. Forge frame from kernel
     err = frame_forge(led_cap, start, BASE_PAGE_SIZE, 0);
-    DEBUG_ERR(err, "forging out_enab");
+    //DEBUG_ERR(err, "forging out_enab");
 
     struct frame_identity ret1;
     err = frame_identify(led_cap, &ret1);
-    DEBUG_ERR(err, "identify frame for led_cap");
+    //DEBUG_ERR(err, "identify frame for led_cap");
 
-    debug_printf("Slot of new cap is: %d base: %ld size: %ld\n", led_cap.slot, ret1.base, ret1.bytes);
+    //debug_printf("Slot of new cap is: %d base: %ld size: %ld\n", led_cap.slot, ret1.base, ret1.bytes);
     // 3. Map led_cap frame to our pagetable
     err = paging_map_frame(get_current_paging_state(), &ret, BASE_PAGE_SIZE, led_cap,
             NULL, NULL);
-    DEBUG_ERR(err, "ERROR in mapping page for led_cap");
+    //DEBUG_ERR(err, "ERROR in mapping page for led_cap");
     
     volatile int * out_enab = (int *)(ret + 0x134);
-    volatile int * dataout  = (int *)(ret + 0x138);
+    volatile int * dataout  = (int *)(ret + 0x13C);
     int mask = 1 << LED_BIT;
     *out_enab &= ~(mask);
-    if(status == 1)
-        *dataout ^= mask;
+    *dataout ^= mask;
 }
 
 /**
@@ -134,12 +133,7 @@ static inline void rpc_light_led(int status)
 static inline char rpc_getchar(void)
 {
     char c;
-    while (true) {
-        sys_getchar(&c);
-        if (c != '\0') {
-            break;
-        }
-    }
+    sys_getchar(&c);
     return c;
 }
 /**
@@ -150,9 +144,25 @@ static inline void rpc_string(char* string, size_t len)
     sys_print(string, len);
 }
 /**
+ * \brief Returns the DevFrame cap using given base and bytes size.
+ */
+errval_t rpc_device_cap(lpaddr_t base, size_t bytes, struct capref* retcap);
+/**
+ * \brief Returns the interrupt (IRQ) capability.
+ */
+static inline errval_t rpc_irq_cap(struct capref* retcap)
+{
+    CHECK("rpc_irq_cap: allocating slot for retcap", slot_alloc(retcap));
+    return cap_copy(*retcap, cap_irq);
+}
+/**
  * \brief Spawns a new process, returning its PID.
  */
 errval_t rpc_spawn(char* name, domainid_t* pid);
+/**
+ * \brief Spawns a new process, returning its PID.
+ */
+errval_t rpc_spawn_args(struct capref* proc_info, domainid_t* pid);
 /**
  * \brief Returns the name of the process with the given PID.
  */
@@ -209,6 +219,11 @@ void* process_local_string_request(struct lmp_recv_msg* msg,
 void* process_local_spawn_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients);
 /**
+ * \brief Processes a same-core spawn new process request.
+ */
+void* process_local_spawn_args_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients);
+/**
  * \brief Processes a same-core get process name for PID request.
  */
 void* process_local_get_process_name_request(struct lmp_recv_msg* msg,
@@ -218,7 +233,16 @@ void* process_local_get_process_name_request(struct lmp_recv_msg* msg,
  */
 void* process_local_get_process_list_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients);
-
+/**
+ * \brief Processes a same-core get device cap request.
+ */
+void* process_local_device_cap_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients);
+/**
+ * \brief Processes a same-core get IRQ cap request.
+ */
+void* process_local_irq_cap_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Handshake response handler.
  */
@@ -249,5 +273,13 @@ errval_t send_process_name(void* args);
  * \brief Process list response handler.
  */
 errval_t send_ps_list(void* args);
+/**
+ * \brief Device cap response handler.
+ */
+errval_t send_device_cap(void* args);
+/**
+ * \brief IRQ cap response handler.
+ */
+errval_t send_irq_cap(void* args);
 
 #endif /* _INIT_RPC_SERVER_H_ */

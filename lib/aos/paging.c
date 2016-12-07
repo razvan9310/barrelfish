@@ -37,7 +37,7 @@ static inline char* paging_heap_malloc(size_t size)
     }
     return buf;
 }
-
+static struct thread_mutex mutex;
 /**
  * \brief Helper function that allocates a slot and
  *        creates a ARM l2 page table capability
@@ -114,6 +114,7 @@ errval_t paging_init(void)
         .cnode = cnode_page,
         .slot = 0
     };
+    thread_mutex_init(&mutex);
     paging_init_state(&current, VADDR_OFFSET, l1_cap,
             get_default_slot_allocator());
     set_current_paging_state(&current);
@@ -137,7 +138,7 @@ static void handle_pagefault(int subtype,
         arch_registers_fpu_state_t* fpuregs)
 {
     // TODO(razvan): What should be done based on subtype, regs, fpuregs?
-
+    thread_mutex_lock(&mutex);
     lvaddr_t vaddr = (lvaddr_t) addr;
     
     if (vaddr < BASE_PAGE_SIZE) {
@@ -191,6 +192,7 @@ static void handle_pagefault(int subtype,
         // TODO(razvan): free frame before killing thread.
         thread_exit(THREAD_EXIT_PAGEFAULT);
     }
+    thread_mutex_unlock(&mutex);
 }
 
 static void default_exception_handler(enum exception_type type, int subtype,
@@ -208,20 +210,19 @@ static void default_exception_handler(enum exception_type type, int subtype,
     }
 }
 
+static char stack_base[8192 * 4] = {0};
 void paging_init_onthread(struct thread *t)
 {
     // TODO (M4): setup exception handler for thread `t'.
-    static char stack_base[8192 * 4] = {0};
     char* stack_top = stack_base + 8192 * 2;
     t->exception_stack = (void *) stack_base;
     t->exception_stack_top = (void *) stack_top;
     t->exception_handler = (exception_handler_fn) default_exception_handler;
-    // CHECK("init.c#barrelfish_init_onthread: thread_set_exception_handler (2)",
-    //         thread_set_exception_handler(
-    //                 (exception_handler_fn) default_exception_handler,
-    //                 NULL,
-    //                 (void*) stack_base, (void*) stack_top,
-    //                 NULL, NULL));
+            // thread_set_exception_handler(
+            //         (exception_handler_fn) default_exception_handler,
+            //         NULL,
+            //         (void*) stack_base, (void*) stack_top,
+            //         NULL, NULL);
 }
 
 /**
