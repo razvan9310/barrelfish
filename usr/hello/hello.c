@@ -24,7 +24,7 @@
 
 int main(int argc, char *argv[])
 {
-	debug_printf("Hello from hello process\n");
+	debug_printf("Hello from hello process %s\n", argv[1]);
 
 	// domainid_t pid;
 

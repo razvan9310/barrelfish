@@ -673,6 +673,12 @@ errors libelf ELF_ERR_ {
     failure NOT_PAGE_ALIGNED    "Unaligned load address specified in ELF header",
 };
 
+// errors from Bash library
+errors libelf BASH_ERR_ {
+    failure SYNTAX              "Invalid syntax",
+    failure FILE_NOT_FOUND      "Invalid file name",
+};
+
 // errors from memory management library
 errors libmm MM_ERR_ {
     failure FIND_NODE           "Failure in find_node()",

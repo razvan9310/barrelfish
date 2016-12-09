@@ -122,7 +122,7 @@ errval_t aos_rpc_process_spawn(struct aos_rpc *chan, char *name,
  * \arg argv array storing the values of arguments
  * \arg newpid the process id of the newly spawned process
  */
-errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, struct capref *proc_info,
+errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, char *name, 
                                     coreid_t core, domainid_t *newpid);
 
 /**

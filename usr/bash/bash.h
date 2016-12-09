@@ -4,7 +4,7 @@
  */
 
 /*
- * Copyright (c) 2007, 2008, ETH Zurich.
+ * Copyright (c) 2016, ETH Zurich.
  * All rights reserved.
  *
  * This file is distributed under the terms in the attached LICENSE file.
@@ -20,25 +20,25 @@ void get_command(void);
 void do_backslash(void);
 void clean_buffer(void);
 bool is_space(char c);
-void sanitize_input(char *);
+errval_t sanitize_input(char *);
 void execute_command(char **argc, int argv);
 
 // Command Functions
-void handle_echo(char *argc[], int argv);
-void handle_ps(char *argc[], int argv);
-void handle_threads(char *argc[], int argv);
+errval_t handle_echo(char *argc[], int argv);
+errval_t handle_ps(char *argc[], int argv);
+errval_t handle_threads(char *argc[], int argv);
 errval_t handle_light_led(char *argc[], int argv);
-void handle_memtest(char *argc[], int argv);
-void handle_pwd(char *argc[], int argv);
-void handle_cat(char *argc[], int argv);
-void handle_ls(char *argc[], int argv);
-void handle_cd(char *argc[], int argv);
-void handle_wc(char *argc[], int argv);
-void handle_grep(char *argc[], int argv);
+errval_t handle_memtest(char *argc[], int argv);
+errval_t handle_pwd(char *argc[], int argv);
+errval_t handle_cat(char *argc[], int argv);
+errval_t handle_ls(char *argc[], int argv);
+errval_t handle_cd(char *argc[], int argv);
+errval_t handle_wc(char *argc[], int argv);
+errval_t handle_grep(char *argc[], int argv);
 errval_t handle_oncore(char *argc[], int argv);
-void handle_help(char *argc[], int argv);
-void handle_mkdir(char *argc[], int argv);
-void handle_clear(char *argc[], int argv);
+errval_t handle_help(char *argc[], int argv);
+errval_t handle_mkdir(char *argc[], int argv);
+errval_t handle_clear(char *argc[], int argv);
 
 typedef void (*command_handler_fn)(char* const argc[], int argv);
 struct command_handler_entry
@@ -47,6 +47,6 @@ struct command_handler_entry
     command_handler_fn handler;
 };
 
-#define SHELL_PRINTF(...) printf(__VA_ARGS__)
+#define SHELL_PRINTF(...) fprintf(__VA_ARGS__)
 
 #endif

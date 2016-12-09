@@ -167,7 +167,7 @@ errval_t rpc_spawn(char* name, domainid_t* pid);
 /**
  * \brief Spawns a new process, returning its PID.
  */
-errval_t rpc_spawn_args(struct capref* proc_info, domainid_t* pid);
+errval_t rpc_spawn_args(char* name , domainid_t* pid);
 /**
  * \brief Returns the name of the process with the given PID.
  */

@@ -4,7 +4,7 @@
  */
 
 /*
- * Copyright (c) 2007, 2008, ETH Zurich.
+ * Copyright (c) 2016, ETH Zurich.
  * All rights reserved.
  *
  * This file is distributed under the terms in the attached LICENSE file.
@@ -33,9 +33,17 @@ uint64_t buf_size = 16;		  // Buffer size of input array
 uint64_t pos = 0;			  // Current size of buffer array
 uint32_t inputRedirect = 0;   // Input Redirection Bit
 uint32_t outputRedirect = 0;  // Output Redirection Bit
+FILE *fout;					  // File out
+FILE *fin;					  // File in
 
 // BIG TODO: CHANGE ALL FUNCTION DEFINITION TO ERRVAL_T
 // Better error handling mechanisms
+
+// Extra Challenges
+// [OK] Move IRQ CAP to BASH Process
+// [OK] Redirect Input/Output to File
+// [] Pipe Commands
+// [] Tab to autocomplete
 
 // Helper Functions:
 void do_backslash(void)
@@ -56,50 +64,63 @@ void clean_buffer(void)
 {
 	free(input);
 	pos = 0;
+	if(inputRedirect>0) fclose(fin);
+	if(outputRedirect>0) {
+		debug_printf("I am here\n");
+		fclose(fout);
+	}
 	inputRedirect = 0;
 	outputRedirect = 0;
 	buf_size = 16;
 	input = malloc(buf_size);
+	fout = stdout;
+	fin = stdin;
 }
 
 static void terminal_read_handler(void *params)
 {
 	aos_rpc_serial_getchar(get_init_rpc(), (input+pos));
 	if(*(input+pos) == '\r') {
-		pos++;
 		*(input+pos) = '\0';
 		sanitize_input(input);
 	}else {
-		if(*(input+pos) == 127) {
-			if(pos) {
-				do_backslash();
-				*(input+pos) = '\0';
-				pos--;
+		if(*(input+pos) != '\t'){
+			if(*(input+pos) == 127) {
+				if(pos) {
+					do_backslash();
+					pos--;
+				}else {
+					printf("%c", '\a');
+					fflush(stdout);
+				}
 			}else {
-				SHELL_PRINTF("%c", '\a');
-				fflush(stdout);
+				aos_rpc_serial_putchar(get_init_rpc(), *(input+pos));
+				pos++;
+			}
+			if(pos == buf_size) {
+				input = realloc(input, 2*buf_size);
+				buf_size = 2*buf_size;
 			}
 		}else {
-			aos_rpc_serial_putchar(get_init_rpc(), *(input+pos));
-			pos++;
-		}
-		if(pos == buf_size) {
-			input = realloc(input, 2*buf_size);
-			buf_size = 2*buf_size;
+			printf("\n");
+			printf("gf");
+			printf("\033[1A");
+			printf("\033[4C");
+			fflush(stdout);
 		}
 	}
 }
 
-void handle_echo(char *argc[], int argv)
+errval_t handle_echo(char *argc[], int argv)
 {
-	// TODO: Handle ("")
 	for(int i=1; i<argv; i++) {
-		printf("%s ", argc[i]);
+		SHELL_PRINTF(fout, "%s ", argc[i]);
 	}
-	printf("\n");
+	SHELL_PRINTF(fout, "\n");
+	return SYS_ERR_OK;
 }
 
-void handle_ps(char *argc[], int argv)
+errval_t handle_ps(char *argc[], int argv)
 {
 	domainid_t *pids_core0;
 	size_t pid_count_core0;
@@ -107,17 +128,15 @@ void handle_ps(char *argc[], int argv)
 	size_t pid_count_core1;
 	coreid_t core = 0;
 	errval_t err; 
-	err = aos_rpc_process_get_all_pids(get_init_rpc(),core, &pids_core0, 
-										&pid_count_core0);
-	if(err_is_fail(err)) {
-		DEBUG_ERR(err, "Getting all pids");
-	}
+	CHECK("Err in getting all the pids", aos_rpc_process_get_all_pids(get_init_rpc(),core,
+								 &pids_core0, &pid_count_core0));
+
 	char *name;
-	printf("Core      Pids    Process Name\n");
-	printf("================================\n");
+	SHELL_PRINTF(fout, "Core      Pids    Process Name\n");
+	SHELL_PRINTF(fout, "================================\n");
 	for(int i=0; i<pid_count_core0; i++) {
 		aos_rpc_process_get_name(get_init_rpc(), *pids_core0, core, &name);
-		printf("%d          %d       %s \n", core, *pids_core0, name);
+		SHELL_PRINTF(fout, "%d          %d       %s \n", core, *pids_core0, name);
 		pids_core0++;
 	}
 	core = 1;
@@ -128,9 +147,10 @@ void handle_ps(char *argc[], int argv)
 	}
 	for(int i=0; i<pid_count_core1; i++) {
 		aos_rpc_process_get_name(get_init_rpc(), *pids_core1, core, &name);
-		printf("%d          %d       %s \n", core, *pids_core1, name);
+		SHELL_PRINTF(fout, "%d          %d       %s \n", core, *pids_core1, name);
 		pids_core1++;
 	}
+	return SYS_ERR_OK;
 }
 
 static void pesudo_task(void)
@@ -138,12 +158,16 @@ static void pesudo_task(void)
 	// char *a = malloc(10);
 	// a = "hello";
 	// printf("%s\n", a);
-	SHELL_PRINTF("###### Hello World from a new thread &&&&&&\n");
+	SHELL_PRINTF(fout, "###### Hello World from a new thread &&&&&&\n");
 	//SHELL_PRINTF("My id is: %d\n", thread_get_id(thread_self()));
 }
 
-void handle_threads(char *argc[], int argv)
+errval_t handle_threads(char *argc[], int argv)
 {
+	if(argv != 2) {
+		printf("Syntax error: threads <number of threads>\n");
+		return BASH_ERR_SYNTAX;
+	}
 	int num_threads = atoi(argc[1]);
 	struct thread *t[num_threads];
 	for(int i=0; i<num_threads; i++) {
@@ -153,6 +177,7 @@ void handle_threads(char *argc[], int argv)
 	for(int i=0; i<num_threads; i++) {
 		thread_join(t[i], NULL);
 	}
+	return SYS_ERR_OK;
 }
 
 static void thread_handle_memtest(void *params)
@@ -162,54 +187,65 @@ static void thread_handle_memtest(void *params)
 	for(int i=0; i<*size; i++) {
 		*(a+i) = 'J';
 	}
-	printf("Result of memtest:\n");
-	printf("%s\n", a);
+	SHELL_PRINTF(fout, "Result of memtest:\n %s\n", a);
 }
 
-void handle_memtest(char *argc[], int argv)
+errval_t handle_memtest(char *argc[], int argv)
 {
 	size_t *size = malloc(sizeof(size_t));
 	*size = atoi(argc[1]);
 	struct thread *t = thread_create((thread_func_t) thread_handle_memtest, (void*)size);
 	thread_join(t, NULL);
+	return SYS_ERR_OK;
 }
 
 errval_t handle_light_led(char *argc[], int argv)
 {
+	if(argv != 2) {
+		printf("Syntax error: led on/off\n");
+		return BASH_ERR_SYNTAX;
+	}
 	uintptr_t status = 0;
 	coreid_t core = 0;
 	if(strncmp(argc[1], "on", 2) == 0) status = 1;
 	else if(strncmp(argc[1], "off", 3) == 0) status = 2;
-	errval_t err = aos_rpc_light_led(get_init_rpc(), status, core);
-	return err;
+	else {
+		printf("Syntax error: led on/off\n");
+		return BASH_ERR_SYNTAX;
+	}
+	CHECK("ERR in aos_rpc_light_led", aos_rpc_light_led(get_init_rpc(), status, core));
+	return SYS_ERR_OK;
 }
 
-void handle_pwd(char *argc[], int argv)
+errval_t handle_pwd(char *argc[], int argv)
 {
-	printf("Current directory is: %s\n", wd);	
+	SHELL_PRINTF(fout, "Current directory is: %s\n", wd);
+	return SYS_ERR_OK;	
 }
 
-void handle_ls(char *argc[], int argv)
+errval_t handle_ls(char *argc[], int argv)
 {
 	fs_dirhandle_t ent;
 	opendir(wd, &ent);
 	char *name;
 	while((readdir(ent, &name)) == SYS_ERR_OK) {
-		while(*name) {
-			printf("%c", *name);
-			name++;
-		}
-		printf("\n");
+		SHELL_PRINTF(fout, "%s\r\n", name);
 	}
+	return SYS_ERR_OK;
 }
 
-void handle_mkdir(char *argc[], int argv)
+errval_t handle_mkdir(char *argc[], int argv)
 {
-	mkdir(argc[1]);
+	CHECK("Error in creating directory\n", mkdir(argc[1]));
+	return SYS_ERR_OK;
 }
 
-void handle_cd(char *argc[], int argv)
+errval_t handle_cd(char *argc[], int argv)
 {
+	if(argv != 2) {
+		printf("Correct Syntax for cd is: cd <name of directory>\n");
+		return BASH_ERR_SYNTAX;
+	}
 	if(strlen(wd) == (max_len_wd-1)) {
 		//max_len_wd = max(2*max_len_wd, max_len_wd)
 		wd = realloc(wd, 2*max_len_wd);
@@ -225,27 +261,37 @@ void handle_cd(char *argc[], int argv)
 	}
 	pos_wd++;
 	//strcat(wd, argc[1]);
+	return SYS_ERR_OK;
 }
 
-void handle_cat(char *argc[], int argv)
+errval_t handle_cat(char *argc[], int argv)
 {
 	FILE *fp;
+	int c = 0;
 	fp = fopen(argc[1], "r");
-	fseek(fp, 0, SEEK_END);
-	uint64_t size = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-	char *string = malloc(size+1);
-	fread(string, size, 1, fp);
+	if(fp == NULL) {
+		printf("No file named %s\n", argc[1]);
+		return BASH_ERR_FILE_NOT_FOUND;
+	}
+	while ((c = fgetc(fp)) != EOF) { 
+		SHELL_PRINTF(fout, "%c", c);
+	}
 	fclose(fp);
-	string[size] = 0;
-	printf("%s\n", string);
-	fclose(fp);
+	return SYS_ERR_OK;
 }
 
-void handle_wc(char *argc[], int argv)
+errval_t handle_wc(char *argc[], int argv)
 {
+	if(argv != 2) {
+		printf("Correct Syntax for cat is : wc <name of the file>\n");
+		return BASH_ERR_SYNTAX;
+	}
 	FILE *fp;
 	fp = fopen(argc[1], "r");
+	if(fp == NULL) {
+		printf("No file named %s\n", argc[1]);
+		return BASH_ERR_FILE_NOT_FOUND;
+	}
 	int tot_chars = 0;     /* total characters */
 	int tot_lines = 0;     /* total lines */
 	int tot_words = 0;     /* total words */
@@ -270,9 +316,10 @@ void handle_wc(char *argc[], int argv)
 		tot_lines++;
 	}
 
-	printf("Lines, Words, Characters\n");
-	printf(" %3d %3d %3d\n", tot_lines, tot_words, tot_chars);
+	SHELL_PRINTF(fout, "Lines, Words, Characters\n");
+	SHELL_PRINTF(fout, "%3d    %3d     %3d\n", tot_lines, tot_words, tot_chars);
 	fclose(fp);
+	return SYS_ERR_OK;
 }
 int	grep(char*, FILE*, char*);
 int	match(char*, char*);
@@ -293,8 +340,8 @@ int grep(char *regexp, FILE *f, char *name)
 		if (match(regexp, buf)) {
 			nmatch++;
 			if (name != NULL)
-				printf("%s:", name);
-			printf("%s\n", buf);
+				SHELL_PRINTF(fout, "%s:", name);
+			SHELL_PRINTF(fout, "%s\n", buf);
 		}
 	}
 	return nmatch;
@@ -336,51 +383,71 @@ int matchstar(int c, char *regexp, char *text)
 	return 0;
 }
 
-void handle_grep(char *argc[], int argv)
+errval_t handle_grep(char *argc[], int argv)
 {
 	FILE *fp;
 	fp = fopen(argc[2], "r");
+	if(fp == NULL) {
+		printf("No file named: %s\n", argc[2]);
+		return BASH_ERR_FILE_NOT_FOUND;
+	}
 	grep(argc[1], fp, NULL);
 	fclose(fp);
+
+	return SYS_ERR_OK;
 }
 
 errval_t handle_oncore(char *argc[], int argv)
 {
 	domainid_t newpid;
 	coreid_t core = atoi(argc[1]);
-	char *end_string = malloc(5);
-	end_string = "END\0";
-	argc[argv] = end_string;
-	struct capref proc_info;
-	size_t ret_size;
-	void *ret;
-	CHECK("Allocate some frame for proc_info",
-		frame_alloc(&proc_info, BASE_PAGE_SIZE, &ret_size));
-	
-	CHECK("Map proc_info to vspace",
-		paging_map_frame(get_current_paging_state(), &ret, 
-		ret_size, proc_info, NULL, NULL));
-	
-	ret = (void **)argc;
+	uint32_t all_args = 0;
+	for(int i=2; i<argv; i++) {
+		all_args += strlen(argc[i]);
+	}
+	char *proc_name = malloc(all_args+(argv-1));
+	memset(proc_name, 0, all_args+(argv-1));
+	strncpy(proc_name, argc[2], strlen(argc[2]));
+	strcat(proc_name, " ");
+	for(int i=3; i<argv; i++) {
+		strcat(proc_name, argc[i]);
+		strcat(proc_name, " ");
+	}
 
-	debug_printf("Slot allocated is : %d\n", proc_info.slot);
+	debug_printf("Length of all args are: %s\n", proc_name);
 	CHECK("Trying to spawn with arguments",
-		aos_rpc_process_spawn_args(get_init_rpc(), &proc_info, core, &newpid));
-
+		aos_rpc_process_spawn_args(get_init_rpc(), proc_name, core, &newpid));
+	free(proc_name);
 	return SYS_ERR_OK;
 }
 
-void handle_help(char *argc[], int argv)
+errval_t handle_help(char *argc[], int argv)
 {
-
+	SHELL_PRINTF(fout, "List of available commands are:\n");
+	SHELL_PRINTF(fout, "echo\n");
+	SHELL_PRINTF(fout, "led on/off\n");
+	SHELL_PRINTF(fout, "threads <number of threads>\n");
+	SHELL_PRINTF(fout, "memtest <size of memory>\n");
+	SHELL_PRINTF(fout, "oncore <coreid> <process name>\n");
+	SHELL_PRINTF(fout, "ps\n");
+	SHELL_PRINTF(fout, "help\n");
+	SHELL_PRINTF(fout, "pwd\n");
+	SHELL_PRINTF(fout, "cd <name of folder>\n");
+	SHELL_PRINTF(fout, "ls\n");
+	SHELL_PRINTF(fout, "cat <name of file>\n");
+	SHELL_PRINTF(fout, "wc <name of file>\n");
+	SHELL_PRINTF(fout, "grep <pattern> <name of file>\n");
+	SHELL_PRINTF(fout, "mkdir <name of new folder\n");
+	return SYS_ERR_OK;
 }
 
-void handle_clear(char *argc[], int argv)
+errval_t handle_clear(char *argc[], int argv)
 {
 	printf("\033[2J");
+	return SYS_ERR_OK;
 }
 
-void sanitize_input(char *ip)
+errval_t sanitize_input(char *ip)
 {
 	int argc_size = 5;
 	int argv = 0;
@@ -404,19 +471,47 @@ void sanitize_input(char *ip)
 	for(int j=0; j<argv; j++) {
 		if(strncmp(argc[j], "<", 1) == 0) {
 			inputRedirect = 1;
+			if((j+1) == argv) {
+				SHELL_PRINTF(fout, "Input Redirection File Missing\n");
+				return BASH_ERR_SYNTAX;
+			}else {
+				fin = fopen(argc[j+1], "r");
+			}
 		}else if(strncmp(argc[j], "<<", 2) == 0) {
 			inputRedirect = 2;
+			if((j+1) == argv) {
+				SHELL_PRINTF(fout, "Input Redirection File Missing\n");
+				return BASH_ERR_SYNTAX;
+			}else {
+				fin = fopen(argc[j+1], "r");
+			}
 		}else if(strncmp(argc[j], ">", 1) == 0) {
 			outputRedirect = 1;
+			if((j+1) == argv) {
+				SHELL_PRINTF(fout, "Output Redirection File Missing\n");
+				return BASH_ERR_SYNTAX;
+			}else {
+				fout = fopen(argc[j+1], "w+");
+			}
 		}else if(strncmp(argc[j], ">>", 1) == 0) {
 			outputRedirect = 2;
+			if((j+1) == argv) {
+				SHELL_PRINTF(fout, "Output Redirection File Missing\n");
+				return BASH_ERR_SYNTAX;
+			}else {
+				fout = fopen(argc[j+1], "a");
+				if(fout == NULL) {
+					printf("Fuck me!!\n");
+				}
+			}
 		}
 	}
 	execute_command(argc, argv);
 	clean_buffer();
 	printf("\n");
-	SHELL_PRINTF("$bash>");
+	SHELL_PRINTF(fout, "$bash>");
 	fflush(stdout);
+	return SYS_ERR_OK;
 }
 
 void execute_command(char *argc[], int argv)
@@ -428,7 +523,7 @@ void execute_command(char *argc[], int argv)
 		- [OK] memtest
 		- oncore
 		- [OK] ps
-		- help
+		- [OK] help
 		- [OK] pwd
 		- [OK] cd
 		- [OK] ls
@@ -470,44 +565,12 @@ void execute_command(char *argc[], int argv)
 	}
 }
 
-// void get_command(void)
-// {
-// 	int buf_size = 16;
-// 	char *input = malloc(buf_size);
-// 	char *input_start = input;
-// 	int pos = 0;
-// 	aos_rpc_serial_getchar(get_init_rpc() , input);
-// 	if(*input == '\r') return;
-// 	while(*input != '\r') {
-// 		if(*input == 127) {
-// 			if (pos){
-// 				do_backslash();
-// 				input--;
-// 				pos--;
-// 			}
-// 			else
-// 				aos_rpc_serial_putchar(get_init_rpc(), '\a');
-// 		}else {
-// 			aos_rpc_serial_putchar(get_init_rpc(), *input);
-// 			input++;
-// 			pos++;
-// 		}
-// 		if(pos == buf_size){
-// 			assert(&input_start[pos] == input);
-// 			input_start = realloc(input_start, 2*buf_size);
-// 			input = &input_start[pos];
-// 			buf_size = 2*buf_size;
-// 		}
-// 		aos_rpc_serial_getchar(get_init_rpc() , input);
-// 	}
-// 	input_start[pos] = '\0';
-// 	sanitize_input(input_start);
-// }
-
 int main(int argc, char *argv[])
 {
-	// TODO: Fix this interrupt handler
+	debug_printf("$$$$$$ Number of args are %d %s %s %s\n",argc, argv[0], argv[1], argv[2]);
 	filesystem_init();
+	fin = stdin;
+	fout = stdout;
 	wd = malloc(max_len_wd);
 	input = malloc(buf_size);
 	wd[0] = '/';
@@ -515,8 +578,9 @@ int main(int argc, char *argv[])
 	pos_wd++;
 
 	FILE *fp;
-	fp = fopen("file.txt", "w+");
-	fprintf(fp, "%s %s", "Hello", "World");
+	fp = fopen("/file.txt", "w+");
+	fprintf(fp, "%s %s\n", "Hello", "World");
+	fprintf(fp, "%s %s\n", "Hello1", "World");
 	fclose(fp);
 
 	errval_t err;
@@ -529,7 +593,7 @@ int main(int argc, char *argv[])
 	printf("\033[2J");
 	printf("Starting bash\n");
 	printf("Hello from the bash\n");
-	SHELL_PRINTF("$bash>");
+	SHELL_PRINTF(fout, "$bash>");
 	fflush(stdout);
 	// domainid_t newpid;
 	// aos_rpc_process_spawn(get_init_rpc(), "hello", 0, &newpid);

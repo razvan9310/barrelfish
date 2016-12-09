@@ -592,22 +592,23 @@ errval_t aos_rpc_process_spawn_args_send_handler(void* void_args)
     
     // TODO: implement functionality to send a number ofer the channel
     // given channel and wait until the ack gets returned.
-    struct aos_rpc* rpc = (struct aos_rpc*) args[0];
+    struct aos_rpc*   rpc = (struct aos_rpc*) args[0];
     //coreid_t* core = (coreid_t*) args[1];
 
     errval_t err;
     size_t retries = 0;
     do {
-        err = lmp_chan_send4(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
+        err = lmp_chan_send9(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
                 AOS_RPC_SPAWN_ARGS,
-                *((uintptr_t*) args[1]),*((uintptr_t*) args[2]), 
-                *((uintptr_t*) args[3]));
+                *((uintptr_t*) args[1]), *((uintptr_t*) args[8]),
+                *((uintptr_t*) args[2]), *((uintptr_t*) args[3]), 
+                *((uintptr_t*) args[4]), *((uintptr_t*) args[5]),
+                *((uintptr_t*) args[6]), *((uintptr_t*) args[7]));
         ++retries;
     } while (err_is_fail(err) && retries < 5);
     if (retries == 5) {
         return err;
     }
-
     return SYS_ERR_OK;
 }
 
@@ -635,21 +636,63 @@ errval_t aos_rpc_process_spawn_args_recv_handler(void* void_args)
     return (errval_t) msg.words[1];
 }
 
-errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, struct capref* proc_info,
+errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, char *name,
                                     coreid_t core, domainid_t *newpid)
 {
-    uintptr_t args[4];
-    args[0] = (uintptr_t) chan;
-    args[1] = (uintptr_t) &core;
-    args[2] = (uintptr_t) proc_info;
-    args[3] = (uintptr_t) newpid;
+    // break name into pieces
+    uintptr_t* args = (uintptr_t*) malloc(9 * sizeof(uintptr_t));
+    args[0] = (uintptr_t) ((struct aos_rpc*) malloc(sizeof(struct aos_rpc)));
+    *((struct aos_rpc*) args[0]) = *chan;
 
-    debug_printf("Slot of proc_info %d core: %d\n", proc_info->slot, core);
-    CHECK("aos_rpc.c#aos_rpc_process_spawn: aos_rpc_send_and_receive",
+    args[1] = (uintptr_t) ((coreid_t*) malloc(sizeof(coreid_t)));
+    *((coreid_t*) args[1]) = core;
+
+    uint32_t len = strlen(name);
+    uint32_t rem_len = len;
+    char words[24];
+    char buf[4];
+    for(int i=0; i<=(len/24); i++) {
+
+        args[8] = (uintptr_t) ((uint32_t*) malloc(sizeof(uint32_t)));
+        *((uint32_t*) args[8]) = rem_len;
+        if(rem_len > 24) {
+            memcpy(words, name + i*24, 24);
+            for(int j=0; j<6; j++) {
+                memcpy(buf, words+(j*4), 4);
+                args[j+2] = (uintptr_t) ((char*) malloc(4*sizeof(char)));
+                *((char*) args[j+2]) = *buf;
+                *((char*) args[j+2] + 1) = *(buf + 1);
+                *((char*) args[j+2] + 2) = *(buf + 2);
+                *((char*) args[j+2] + 3) = *(buf + 3);
+            }
+            rem_len -= 24;
+        }else {
+            memcpy(words, name + i*24, rem_len);
+            rem_len = 24;
+            for(int k=len; k<rem_len; k++) words[k] = 0;
+            
+            for(int j=0; j<(rem_len/4); j++) {
+                memcpy(buf, words+(j*4), 4);
+                //debug_printf("%%%%%%%% %c %c %c %c",buf[j], buf[j+2], buf[j+2], buf[j+3]);
+                args[j+2] = (uintptr_t) ((char*) malloc(4*sizeof(char)));
+                *((char*) args[j+2]) = *buf;
+                *((char*) args[j+2] + 1) = *(buf + 1);
+                *((char*) args[j+2] + 2) = *(buf + 2);
+                *((char*) args[j+2] + 3) = *(buf + 3);
+                //printf("%s\n", args[j+1]);
+            }
+        }
+        CHECK("aos_rpc.c#aos_rpc_process_spawn: aos_rpc_send_and_receive",
             aos_rpc_send_and_receive(args, aos_rpc_process_spawn_args_send_handler,
                     aos_rpc_process_spawn_args_recv_handler));
-
+    }
+    debug_printf("Send and receive suceeded (spawn process)\n");
     *newpid = *(domainid_t*) args[2];
+
+    debug_printf("Pid for process is %u\n", *newpid);
+
+    //TODO: Free args
+
     return SYS_ERR_OK;
 }
 
