@@ -119,21 +119,23 @@ errval_t sdma_rpc_handshake_recv_handler(void* void_args)
     return err;
 }
 
-errval_t sdma_rpc_memcpy(
-		struct sdma_rpc* rpc,
-		struct capref dst,
-		struct capref src,
-		size_t len)
+errval_t sdma_rpc_memcpy(struct sdma_rpc* rpc,
+        struct capref dst,
+        size_t dst_offset,
+        struct capref src,
+        size_t src_offset,
+        size_t len)
 {
 	if (rpc->request_pending) {
 		return SDMA_ERR_REQUEST_IN_PROGRESS;
 	}
 
-    uintptr_t args[4];
+    uintptr_t args[5];
     args[0] = (uintptr_t) rpc;
     args[1] = (uintptr_t) SDMA_RPC_MEMCPY_SRC;
     args[2] = (uintptr_t) &src;
-    args[3] = (uintptr_t) len;
+    args[3] = (uintptr_t) src_offset;
+    args[4] = (uintptr_t) len;
 
     CHECK("sdma_rpc_memcpy: sdma_rpc_send_and_receive (src, len)",
             sdma_rpc_send_and_receive(args, sdma_rpc_memcpy_send_handler,
@@ -141,6 +143,7 @@ errval_t sdma_rpc_memcpy(
 
     args[1] = (uintptr_t) SDMA_RPC_MEMCPY_DST;
     args[2] = (uintptr_t) &dst;
+    args[3] = (uintptr_t) dst_offset;
 
     CHECK("sdma_rpc_memcpy: sdma_rpc_send_and_receive (dst)",
             sdma_rpc_send_and_receive(args, sdma_rpc_memcpy_send_handler,
@@ -164,10 +167,11 @@ errval_t sdma_rpc_memcpy_send_handler(void* void_args)
     struct sdma_rpc *rpc = (struct sdma_rpc*) args[0];
     size_t code = (size_t) args[1];
     struct capref* cap = (struct capref*) args[2];
-    size_t len = (size_t) args[3];
+    size_t offset = (size_t) args[3];
+    size_t len = (size_t) args[4];
     errval_t err;
     do {
-        err = lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, *cap, code, len);
+        err = lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, *cap, code, offset, len);
     } while (err_is_fail(err));
 
     return err;

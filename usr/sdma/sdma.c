@@ -219,6 +219,10 @@ void* sdma_process_handshake(struct sdma_driver* sd, struct capref* cap)
         client->next = sd->clients;
     }
     client->prev = NULL;
+    client->have_caps = 0;
+    client->src_offset = 0;
+    client->dst_offset = 0;
+    client->len = 0;
     sd->clients = client;
 
     // Endpoint for further reference.
@@ -279,10 +283,12 @@ void* sdma_process_memcpy(struct sdma_driver* sd, struct client_state* client,
         // Got src cap + len.
         client->src = *cap;
         client->have_caps |= CAP_MASK_SRC;
-        client->len = (size_t) msg->words[1];
+        client->src_offset = (size_t) msg->words[1];
+        client->len = (size_t) msg->words[2];
     } else {
         // Got dst cap.
         client->dst = *cap;
+        client->dst_offset = (size_t) msg->words[1];
         client->have_caps |= CAP_MASK_DST;
     }
 
@@ -298,17 +304,25 @@ void* sdma_process_memcpy(struct sdma_driver* sd, struct client_state* client,
             if (err_is_fail(err)) {
                 DEBUG_ERR(err, "identifying dst frame for memcpy");
             } else {
-                // As per the string.c memcpy implementation.
-                bool cond1 = src_id.base < dst_id.base
-                        && src_id.base + client->len <= dst_id.base;
-                bool cond2 = dst_id.base < src_id.base
-                        && dst_id.base + client->len <= src_id.base;
-                // Plus len needs to be lte min{src_id.bytes, dst_id.bytes}.
-                bool cond3 = client->len <= src_id.bytes
-                        && client->len <= dst_id.bytes;
+                bool cond1 = client->src_offset < src_id.bytes
+                        && client->dst_offset < dst_id.bytes;
+                size_t src_bytes = (size_t) src_id.bytes - client->src_offset;
+                size_t dst_bytes = (size_t) dst_id.bytes - client->dst_offset;
+                size_t src_addr = (size_t) src_id.base + client->src_offset;
+                size_t dst_addr = (size_t) dst_id.base + client->dst_offset;
 
-                if ((cond1 || cond2) && cond3) {
-                    sdma_start_transfer(sd, client->lc, src_id, dst_id,
+                // As per the string.c memcpy implementation.
+                bool cond2 = src_addr < dst_addr
+                        && src_addr + client->len <= dst_addr;
+                bool cond3 = dst_addr < src_addr
+                        && dst_addr + client->len <= src_addr;
+
+                // Plus len needs to be lte min{src_bytes, dst_bytes}.
+                bool cond4 = client->len <= src_bytes
+                        && client->len <= dst_bytes;
+
+                if (cond1 && (cond2 || cond3) && cond4) {
+                    sdma_start_transfer(sd, client->lc, src_addr, dst_addr,
                             client->len);
                 } else {
                     err = SDMA_ERR_MEMCPY;
@@ -318,6 +332,8 @@ void* sdma_process_memcpy(struct sdma_driver* sd, struct client_state* client,
     
         // Clear cap bits and length field.
         client->have_caps = 0;
+        client->src_offset = 0;
+        client->dst_offset = 0;
         client->len = 0;
     }
 
@@ -370,7 +386,7 @@ chanid_t sdma_avail_channel(struct sdma_driver* sd)
 }
 
 errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
-        struct frame_identity src_id, struct frame_identity dst_id, size_t len)
+        size_t src_addr, size_t dst_addr, size_t len)
 {
     chanid_t chan = sdma_avail_channel(sd);
     if (!sdma_valid_channel(chan)) {
@@ -427,11 +443,10 @@ errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
 
     // 4. CSSA, CDSA: Src and dest start addr.
     // 4.2. Src address.
-    omap44xx_sdma_dma4_cssa_wr(&sd->sdma_dev, chan, (uint32_t) src_id.base);
+    omap44xx_sdma_dma4_cssa_wr(&sd->sdma_dev, chan, (uint32_t) src_addr);
     // 4.3 Dst address.
-    omap44xx_sdma_dma4_cdsa_wr(&sd->sdma_dev, chan, (uint32_t) dst_id.base);
-    debug_printf("Copy src = %x, copy dst = %x\n", (uint32_t) src_id.base,
-            (uint32_t) dst_id.base);
+    omap44xx_sdma_dma4_cdsa_wr(&sd->sdma_dev, chan, (uint32_t) dst_addr);
+    debug_printf("Copy src = %x, copy dst = %x\n", src_addr, dst_addr);
 
     // 5. CCR.
     // 5.1. R/W port addressing modes.

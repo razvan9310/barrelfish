@@ -35,7 +35,9 @@ struct client_state {
     struct EndPoint remote_ep;  // Used to identify clients for handshake.
     
     struct capref src;
+    size_t src_offset;
     struct capref dst;
+    size_t dst_offset;
     uint8_t have_caps;
     size_t len;
 
@@ -158,6 +160,6 @@ static inline bool sdma_valid_channel(chanid_t chan)
  * \brief Starts an SDMA job identified by the given (dst, src, len) tuple.
  */
 errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
-        struct frame_identity src_id, struct frame_identity dst_id, size_t len);
+        size_t src_addr, size_t dst_addr, size_t len);
 
 #endif /* _INIT_SDMA_H_ */

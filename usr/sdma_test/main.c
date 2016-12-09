@@ -47,7 +47,9 @@ int main(int argc, char** argv)
     debug_printf("Alllocated dst frame\n");
 
     // 6. Perform SDMA memcpy RPC.
-    err = sdma_rpc_memcpy(&rpc, dst, src, buf_size/*9001*/);
+    size_t dst_offset = 0;
+    size_t src_offset = 0;
+    err = sdma_rpc_memcpy(&rpc, dst, dst_offset, src, src_offset, buf_size);
     if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "sdma_rpc_memcpy faield");
     }

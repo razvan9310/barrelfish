@@ -51,10 +51,14 @@ errval_t sdma_rpc_handshake_send_handler(void* void_args);
 errval_t sdma_rpc_handshake_recv_handler(void* void_args);
 
 /**
- * \brief SDMA RPC for memcpy (dst, src, len).
+ * \brief SDMA RPC for memcpy (dst, dst_offset, src, src_offset, len).
  */
-errval_t sdma_rpc_memcpy(struct sdma_rpc* rpc, struct capref dst,
-		struct capref src, size_t len);
+errval_t sdma_rpc_memcpy(struct sdma_rpc* rpc,
+        struct capref dst,
+        size_t dst_offset,
+		struct capref src,
+        size_t src_offset,
+        size_t len);
 /**
  * \brief Send handler for RPC memcpy.
  */
