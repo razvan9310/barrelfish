@@ -12,10 +12,38 @@
  * ETH Zurich D-INFK, Universitaetsstrasse 6, CH-8092 Zurich. Attn: Systems Group.
  */
 
+#include <stdlib.h>
+#include <string.h>
+
+#include <aos/aos_rpc.h>
+#include <aos/waitset.h>
 #include <driverkit/driverkit.h>
 #include <omap44xx_map.h>
+#include <omap_timer/timer.h>
 
 #include "sdma.h"
+
+struct client_state* sdma_identify_client_cap(struct sdma_driver* sd,
+        struct capref* cap)
+{
+    struct capability ret;
+    errval_t err = debug_cap_identify(*cap, &ret);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "identifying client cap");
+        return NULL;
+    }
+
+    struct client_state* client = sd->clients;
+    while (client != NULL) {
+        if (client->remote_ep.listener == ret.u.endpoint.listener
+                && client->remote_ep.epoffset == ret.u.endpoint.epoffset) {
+            break;
+        }
+        client = client->next;
+    }
+    
+    return client;
+}
 
 errval_t sdma_map_device(struct sdma_driver* sd)
 {
@@ -30,6 +58,14 @@ void sdma_initialize_driver(struct sdma_driver* sd)
     omap44xx_sdma_initialize(&sd->sdma_dev, (mackerel_addr_t) sd->sdma_vaddr);
     debug_printf("omap44xx_sdma_dma4_revision_rd = 0x%x\n",
             omap44xx_sdma_dma4_revision_rd(&sd->sdma_dev));
+
+    sd->clients = NULL;
+    // Initialize UID generator. Do this here, before any client connections
+    // are set up, to prevent clients for potentially seeding the PRNG during
+    // the same clock second so as to predict the UID sequence.
+    omap_timer_init();
+    omap_timer_ctrl(true);
+    srand((unsigned) omap_timer_read());
 }
 
 void sdma_interrupt_handler(void* arg)
@@ -60,7 +96,6 @@ errval_t sdma_setup_config(struct sdma_driver* sd)
     // 3.1. Enable IRQ line 0.
     uint32_t enable_value = 4294967295u;
     omap44xx_sdma_dma4_irqenable_wr(&sd->sdma_dev, 0, enable_value);
-    debug_printf("Enabled IRQ line 0 with value %u\n", enable_value);
 
     // 3.2. Clear IRQ line 0.
     omap44xx_sdma_dma4_irqstatus_line_wr(&sd->sdma_dev, 0, 0);
@@ -86,86 +121,290 @@ errval_t sdma_setup_config(struct sdma_driver* sd)
     return SYS_ERR_OK;
 }
 
-void sdma_update_channel_status(struct sdma_driver* sd, uint8_t irq_line,
-        uint32_t irq_status)
+errval_t sdma_setup_rpc_server(struct sdma_driver* sd)
 {
-    for (chanid_t chan = 0; chan < SDMA_CHANNELS; ++chan) {
-        if (irq_status & (1u << chan)) {
-            // 1. Misalignment error?
-            uint8_t err = omap44xx_sdma_dma4_csr_misaligned_adrs_err_rdf(
-                    &sd->sdma_dev, chan);
-            if (err) {
-                sd->chan_state[chan].err = SDMA_ERR_MISALIGNED;
-            }
+    sd->lc = get_init_rpc()->lc;
 
-            // 2. Supervisor error?
-            err = omap44xx_sdma_dma4_csr_supervisor_err_rdf(&sd->sdma_dev, 
-                    chan);
-            if (err) {
-                sd->chan_state[chan].err = SDMA_ERR_SUPERVISOR;
-            }
+    static struct aos_rpc new_aos_rpc;
+    CHECK("initializing new aos_rpc_init",
+            aos_rpc_init(&new_aos_rpc, get_default_waitset()));
+    set_init_rpc(&new_aos_rpc);
 
-            // 3. Transfer error?
-            err = omap44xx_sdma_dma4_csr_trans_err_rdf(&sd->sdma_dev, chan);
-            if (err) {
-                sd->chan_state[chan].err = SDMA_ERR_TRANSFER;
-            }
+    CHECK("creating SDMA channel slot", lmp_chan_alloc_recv_slot(&sd->lc));
+    CHECK("copying local cap to cap_sdma_ep",
+            cap_copy(cap_sdma_ep, sd->lc.local_cap));
 
-            // 4. Block complete?
-            uint8_t block_status = omap44xx_sdma_dma4_csr_block_rdf(
-                    &sd->sdma_dev, chan);
-            if (block_status) {
-                sd->chan_state[chan].err = SYS_ERR_OK;
-                sd->chan_state[chan].transfer_in_progress = false;
-                
-                // TODO: RPC back to requesting client or something similar.
-                char* cbuf = (char*) sd->buf;
-                for (size_t i = 0; i < 512; ++i) {
-                    if (i % 128 == 0) {
-                        printf("\n");
-                    }
-                    printf("%c", cbuf[i]);
-                }
-                printf("\n");
-            }
+    size_t recv_arg_size = ROUND_UP(sizeof(struct sdma_driver*), 4)
+            + ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(sizeof(struct client_state*), 4);
+    void* recv_arg = malloc(recv_arg_size);
+    void* recv_arg_cpy = recv_arg;
 
-            // 5. Clear IRQ status.
-            omap44xx_sdma_dma4_irqstatus_line_wr(&sd->sdma_dev, irq_line, 0);
+    *((struct sdma_driver**) recv_arg) = sd;
+    recv_arg = (void*) ROUND_UP(
+            (uintptr_t) recv_arg + sizeof(struct sdma_driver*), 4);
+    *((struct lmp_chan*) recv_arg) = sd->lc;
+    CHECK("registering initial SDMA receive",
+            lmp_chan_register_recv(&sd->lc, get_default_waitset(),
+                    MKCLOSURE(sdma_serve_rpc, recv_arg_cpy)));
+
+    return SYS_ERR_OK;
+}
+
+void sdma_serve_rpc(void* arg)
+{
+    void* arg_cpy = arg;
+    struct sdma_driver** sd = (struct sdma_driver**) arg;
+    arg = (void*) ROUND_UP((uintptr_t) arg + sizeof(struct sdma_driver*), 4);
+    struct lmp_chan* lc = (struct lmp_chan*) arg;
+    arg = (void*) ROUND_UP((uintptr_t) arg + sizeof(struct lmp_chan), 4);
+    struct client_state** client = (struct client_state**) arg;
+
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct capref client_cap;
+
+    errval_t err = lmp_chan_recv(lc, &msg, &client_cap);
+
+    // Reregister.
+    lmp_chan_alloc_recv_slot(lc);
+    lmp_chan_register_recv(lc, get_default_waitset(),
+            MKCLOSURE(sdma_serve_rpc, arg_cpy));
+
+    if (err_is_fail(err) && !lmp_err_is_transient(err)) {
+        USER_PANIC_ERR(err, "lmp_chan_recv failed");
+    }
+
+    void* response_fn = NULL;
+    void* response_arg = NULL;
+
+    switch (msg.words[0]) {
+        case SDMA_RPC_HANDSHAKE:
+            response_fn = (void*) sdma_send_handshake;
+            response_arg = sdma_process_handshake(*sd, &client_cap);
+            break;
+        case SDMA_RPC_MEMCPY_SRC:
+        case SDMA_RPC_MEMCPY_DST:
+            response_fn = (void*) sdma_send_err;
+            response_arg = sdma_process_memcpy(*sd, *client, &msg, &client_cap);
+            break;
+        default:
+            debug_printf("WARNING: invalid SDMA RPC code\n");
+    }
+
+    if (response_fn != NULL && response_arg != NULL) {
+        struct lmp_chan* out = (struct lmp_chan*) response_arg;
+        err = lmp_chan_register_send(out, get_default_waitset(),
+                MKCLOSURE(response_fn, response_arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "register send in sdma_serve_rpc");
         }
     }
 }
 
-void sdma_test_copy(struct sdma_driver* sd, struct capref* frame)
+void* sdma_process_handshake(struct sdma_driver* sd, struct capref* cap)
 {
-    // 1. Channel to send via.
-    chanid_t chan = 10;
+    struct client_state* client = sdma_identify_client_cap(sd, cap);
+    if (client != NULL) {
+        // Client already exists?
+        debug_printf("Got second SDMA hanshake request from same client, "
+                "ignoring it\n");
+        return NULL;
+    }
 
-    // 2. CSDP.
+    client = (struct client_state*) malloc(sizeof(struct client_state));
+    if (sd->clients == NULL) {
+        client->next = NULL;
+    } else {
+        sd->clients->prev = client;
+        client->next = sd->clients;
+    }
+    client->prev = NULL;
+    sd->clients = client;
+
+    // Endpoint for further reference.
+    struct capability ret;
+    debug_cap_identify(*cap, &ret);
+    client->remote_ep = ret.u.endpoint;
+
+    // New channel.
+    lmp_chan_accept(&client->lc, DEFAULT_LMP_BUF_WORDS, *cap);
+    errval_t err = lmp_chan_alloc_recv_slot(&client->lc);
+    if (err_is_fail(err)) {
+        USER_PANIC_ERR(err, "lmp_chan_alloc_recv_slot for new client");
+    }
+
+    debug_cap_identify(client->lc.local_cap, &ret);
+
+    size_t recv_arg_size = ROUND_UP(sizeof(struct sdma_driver*), 4)
+            + ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(sizeof(struct client_state*), 4);
+    void* recv_arg = malloc(recv_arg_size);
+    void* recv_arg_cpy = recv_arg;
+
+    *((struct sdma_driver**) recv_arg) = sd;
+    recv_arg = (void*) ROUND_UP(
+            (uintptr_t) recv_arg + sizeof(struct sdma_driver*), 4);
+    *((struct lmp_chan*) recv_arg) = client->lc;
+    recv_arg = (void*) ROUND_UP(
+            (uintptr_t) recv_arg + sizeof(struct lmp_chan), 4);
+    *((struct client_state**) recv_arg) = client;
+
+    err = lmp_chan_register_recv(&client->lc, get_default_waitset(),
+            MKCLOSURE(sdma_serve_rpc, recv_arg_cpy));
+    if (err_is_fail(err)) {
+        USER_PANIC_ERR(err, "lmp_chan_register_recv for new client");
+    }
+
+    // Response args.
+    return (void*) &client->lc;
+}
+
+void sdma_send_handshake(void* arg)
+{
+    // 1. Channel to send down.
+    struct lmp_chan* lc = (struct lmp_chan*) arg;
+
+    // 2. Send response.
+    errval_t err = lmp_chan_send1(lc, LMP_FLAG_SYNC, lc->local_cap,
+            SDMA_RPC_OK);
+    if (err_is_fail(err)) {
+        USER_PANIC_ERR(err, "lmp_chan_send handshake");
+    }
+}
+
+void* sdma_process_memcpy(struct sdma_driver* sd, struct client_state* client,
+        struct lmp_recv_msg* msg, struct capref* cap)
+{
+    if (msg->words[0] == SDMA_RPC_MEMCPY_SRC) {
+        // Got src cap + len.
+        client->src = *cap;
+        client->have_caps |= CAP_MASK_SRC;
+        client->len = (size_t) msg->words[1];
+    } else {
+        // Got dst cap.
+        client->dst = *cap;
+        client->have_caps |= CAP_MASK_DST;
+    }
+
+    errval_t err = SYS_ERR_OK;
+    if (CAP_MASK_READY == client->have_caps) {
+        struct frame_identity src_id;
+        err = frame_identify(client->src, &src_id);
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "identifying src frame for memcpy");
+        } else {
+            struct frame_identity dst_id;
+            err = frame_identify(client->dst, &dst_id);
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "identifying dst frame for memcpy");
+            } else {
+                // As per the string.c memcpy implementation.
+                bool cond1 = src_id.base < dst_id.base
+                        && src_id.base + client->len <= dst_id.base;
+                bool cond2 = dst_id.base < src_id.base
+                        && dst_id.base + client->len <= src_id.base;
+                // Plus len needs to be lte min{src_id.bytes, dst_id.bytes}.
+                bool cond3 = client->len <= src_id.bytes
+                        && client->len <= dst_id.bytes;
+
+                if ((cond1 || cond2) && cond3) {
+                    sdma_start_transfer(sd, client->lc, src_id, dst_id,
+                            client->len);
+                } else {
+                    err = SDMA_ERR_MEMCPY;
+                }
+            }
+        }
+    
+        // Clear cap bits and length field.
+        client->have_caps = 0;
+        client->len = 0;
+    }
+
+    // Response args.
+    size_t arg_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(sizeof(errval_t), 4);
+    void* arg = malloc(arg_size);
+    void* return_arg = arg;
+
+    // 1. Channel to send down.
+    *((struct lmp_chan*) arg) = client->lc;
+
+    // 2. Error code.
+    arg = (void*) ROUND_UP((uintptr_t) arg + sizeof(struct lmp_chan), 4);
+    *((errval_t*) arg) = err;
+
+    return return_arg;
+}
+
+void sdma_send_err(void* arg)
+{
+    // 1. Channel to send down.
+    struct lmp_chan* lc = (struct lmp_chan*) arg;
+
+    // 2. Error code.
+    arg = (void*) ROUND_UP((uintptr_t) arg + sizeof(struct lmp_chan), 4);
+    errval_t* err = (errval_t*) arg;
+
+    // 3. Generate response code.
+    size_t code = err_is_ok(*err) ? SDMA_RPC_OK : SDMA_RPC_FAILED;
+
+    // 4. Send response.
+    errval_t send_err = lmp_chan_send2(lc, LMP_FLAG_SYNC, NULL_CAP, code, *err);
+    if (err_is_fail(send_err)) {
+        USER_PANIC_ERR(send_err, "lmp_chan_send err");
+    }
+
+    // 5. Free args.
+    free(arg);
+}
+
+chanid_t sdma_avail_channel(struct sdma_driver* sd)
+{
+    for (chanid_t chan = 0; chan < SDMA_CHANNELS; ++chan) {
+        if (!sd->chan_state[chan].transfer_in_progress) {
+            return chan;
+        }
+    }
+    return SDMA_CHANNELS;
+}
+
+errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
+        struct frame_identity src_id, struct frame_identity dst_id, size_t len)
+{
+    chanid_t chan = sdma_avail_channel(sd);
+    if (!sdma_valid_channel(chan)) {
+        return SDMA_ERR_NO_AVAIL_CHANNEL;
+    }
+    sd->chan_state[chan].out_lc = lc;
+
+    // Queue up sdma job from src to dst, size len, on channel chan.
+    // 1. CSDP.
     omap44xx_sdma_dma4_csdp_t csdp = omap44xx_sdma_dma4_csdp_rd(&sd->sdma_dev,
             chan);
-    // 2.1. Transfer ES.
+    // 1.1. Transfer ES.
     size_t es = 4;  // 4-byte == 32-bit.
     csdp = omap44xx_sdma_dma4_csdp_data_type_insert(csdp,
             omap44xx_sdma_DATA_TYPE_32BIT);
-    // 2.2. R/W port access types (single vs burst).
+    // 1.2. R/W port access types (single vs burst).
     csdp = omap44xx_sdma_dma4_csdp_src_burst_en_insert(csdp,
             omap44xx_sdma_BURST_EN_SINGLE);  // Single?
     csdp = omap44xx_sdma_dma4_csdp_dst_burst_en_insert(csdp,
             omap44xx_sdma_BURST_EN_SINGLE);  // Single?
-    // 2.3. Src/dst endianism.
+    // 1.3. Src/dst endianism.
     csdp = omap44xx_sdma_dma4_csdp_src_endian_insert(csdp,
             omap44xx_sdma_ENDIAN_LITTLE);  // Little-endian?
     csdp = omap44xx_sdma_dma4_csdp_dst_endian_insert(csdp,
             omap44xx_sdma_ENDIAN_LITTLE);  // Little-endian?
-    // 2.4. Write mode: last non posted.
+    // 1.4. Write mode: last non posted.
     csdp = omap44xx_sdma_dma4_csdp_write_mode_insert(csdp,
             omap44xx_sdma_WRITE_MODE_LAST_NON_POSTED);
-    // 2.5 Src/dst (non-)packed.
+    // 1.5 Src/dst (non-)packed.
     csdp = omap44xx_sdma_dma4_csdp_src_packed_insert(csdp,
             omap44xx_sdma_SRC_PACKED_DISABLE);  // Non-packed?
     csdp = omap44xx_sdma_dma4_csdp_dst_packed_insert(csdp,
             omap44xx_sdma_SRC_PACKED_DISABLE);  // Non-packed?
-    // 2.6 Write back reg value.
+    // 1.6 Write back reg value.
     omap44xx_sdma_dma4_csdp_wr(&sd->sdma_dev, chan, csdp);
 
     // 2. CEN: elements per frame.
@@ -178,25 +417,21 @@ void sdma_test_copy(struct sdma_driver* sd, struct capref* frame)
     // 3. CFN: frames per block.
     omap44xx_sdma_dma4_cfn_t cfn = omap44xx_sdma_dma4_cfn_rd(&sd->sdma_dev,
             chan);
-    size_t fn = 4;  // 4 frames per block.
+    size_t fs = es * en;
+    size_t fn =  len / fs;
+    if (len % fs != 0) {
+        ++fn;
+    }
     cfn = omap44xx_sdma_dma4_cfn_channel_frame_nbr_insert(cfn, fn);
     omap44xx_sdma_dma4_cfn_wr(&sd->sdma_dev, chan, cfn);
 
     // 4. CSSA, CDSA: Src and dest start addr.
-    // 4.1. Identify frame. Will copy from frame.base to frame.base + 512.
-    struct frame_identity fid;
-    errval_t err = frame_identify(*frame, &fid);
-    if (err_is_fail(err)) {
-        USER_PANIC_ERR(err, "frame identify for copying");
-    }
-
     // 4.2. Src address.
-    omap44xx_sdma_dma4_cssa_wr(&sd->sdma_dev, chan, (uint32_t) fid.base);
+    omap44xx_sdma_dma4_cssa_wr(&sd->sdma_dev, chan, (uint32_t) src_id.base);
     // 4.3 Dst address.
-    omap44xx_sdma_dma4_cdsa_wr(&sd->sdma_dev, chan,
-            (uint32_t) fid.base + es * en * fn);
-    debug_printf("Copy src = %x, copy dst = %x\n", (uint32_t) fid.base,
-            (uint32_t) fid.base + es * en * fn);
+    omap44xx_sdma_dma4_cdsa_wr(&sd->sdma_dev, chan, (uint32_t) dst_id.base);
+    debug_printf("Copy src = %x, copy dst = %x\n", (uint32_t) src_id.base,
+            (uint32_t) dst_id.base);
 
     // 5. CCR.
     // 5.1. R/W port addressing modes.
@@ -237,4 +472,68 @@ void sdma_test_copy(struct sdma_driver* sd, struct capref* frame)
     ccr = omap44xx_sdma_dma4_ccr_rd(&sd->sdma_dev, chan);
     ccr = omap44xx_sdma_dma4_ccr_enable_insert(ccr, 1);
     omap44xx_sdma_dma4_ccr_wr(&sd->sdma_dev, chan, ccr);
+
+    return SYS_ERR_OK;
+}
+
+void sdma_update_channel_status(struct sdma_driver* sd, uint8_t irq_line,
+        uint32_t irq_status)
+{
+    for (chanid_t chan = 0; chan < SDMA_CHANNELS; ++chan) {
+        if (irq_status & (1u << chan)) {
+            // 1. Misalignment error?
+            uint8_t err = omap44xx_sdma_dma4_csr_misaligned_adrs_err_rdf(
+                    &sd->sdma_dev, chan);
+            if (err) {
+                sd->chan_state[chan].err = SDMA_ERR_MISALIGNED;
+            }
+
+            // 2. Supervisor error?
+            err = omap44xx_sdma_dma4_csr_supervisor_err_rdf(&sd->sdma_dev, 
+                    chan);
+            if (err) {
+                sd->chan_state[chan].err = SDMA_ERR_SUPERVISOR;
+            }
+
+            // 3. Transfer error?
+            err = omap44xx_sdma_dma4_csr_trans_err_rdf(&sd->sdma_dev, chan);
+            if (err) {
+                sd->chan_state[chan].err = SDMA_ERR_TRANSFER;
+            }
+
+            // 4. Block complete?
+            uint8_t block_status = omap44xx_sdma_dma4_csr_block_rdf(
+                    &sd->sdma_dev, chan);
+            if (block_status) {
+                sd->chan_state[chan].err = SYS_ERR_OK;
+                sd->chan_state[chan].transfer_in_progress = false;
+            }
+
+            // 5. Create response args.
+            size_t arg_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+                    + ROUND_UP(sizeof(errval_t), 4);
+            void* arg = malloc(arg_size);
+            void* response_arg = arg;
+
+            // 5.1. Channel to send down.
+            *((struct lmp_chan*) arg) = sd->chan_state[chan].out_lc;
+
+            // 5.2. Error code from sdma_start_transfer.
+            arg = (void*) ROUND_UP((uintptr_t) arg + sizeof(struct lmp_chan), 4);
+            *((errval_t*) arg) = sd->chan_state[chan].err;
+
+            // 6. Send response to client.
+            errval_t send_err = lmp_chan_register_send(
+                    &sd->chan_state[chan].out_lc,
+                    get_default_waitset(),
+                    MKCLOSURE(sdma_send_err, response_arg));
+            if (err_is_fail(send_err)) {
+                USER_PANIC_ERR(send_err,
+                        "lmp_chan_register_send in interrupt handler");
+            }
+
+            // 7. Clear IRQ status.
+            omap44xx_sdma_dma4_irqstatus_line_wr(&sd->sdma_dev, irq_line, 0);
+        }
+    }
 }

@@ -1,0 +1,79 @@
+/**
+ * \file
+ * \brief SDMA (System Direct Memory Access) RPC bindings.
+ */
+
+/*
+ * Copyright (c) 2016, ETH Zurich.
+ * All rights reserved.
+ *
+ * This file is distributed under the terms in the attached LICENSE file.
+ * If you do not find this file, copies can be found by writing to:
+ * ETH Zurich D-INFK, Universitaetsstrasse 6, CH-8092 Zurich. Attn: Systems Group.
+ */
+
+#ifndef _SDMA_RPC_H_
+#define _SDMA_RPC_H_
+
+#include <aos/aos.h>
+#include <aos/waitset.h>
+
+#define SDMA_RPC_OK         0
+#define SDMA_RPC_FAILED     1
+#define SDMA_RPC_HANDSHAKE  1 << 1
+#define SDMA_RPC_MEMCPY_SRC 1 << 2
+#define SDMA_RPC_MEMCPY_DST 1 << 3
+
+struct sdma_rpc {
+	struct lmp_chan lc;
+	struct waitset* ws;
+
+	bool request_pending;
+};
+
+/**
+ * \brief Sends and receives an RPC request-response pair.
+ */
+errval_t sdma_rpc_send_and_receive(uintptr_t* args, void* send_handler,
+        void* rcv_handler);
+
+/**
+ * \brief Initializes an sdma_rpc structure by connecting to the SDMA driver.
+ */
+errval_t sdma_rpc_init(struct sdma_rpc* rpc, struct waitset* ws);
+/**
+ * \brief Starts handshake by sending local endpoint cap to SDMA driver.
+ */
+errval_t sdma_rpc_handshake_send_handler(void* void_args);
+/**
+ * \brief Finalizes handshake by receiving ack from SDMA driver.
+ */
+errval_t sdma_rpc_handshake_recv_handler(void* void_args);
+
+/**
+ * \brief SDMA RPC for memcpy (dst, src, len).
+ */
+errval_t sdma_rpc_memcpy(struct sdma_rpc* rpc, struct capref dst,
+		struct capref src, size_t len);
+/**
+ * \brief Send handler for RPC memcpy.
+ */
+errval_t sdma_rpc_memcpy_send_handler(void* void_args);
+/**
+ * \brief Receive handler for RPC responses.
+ */
+errval_t sdma_rpc_response_recv_handler(void* void_args);
+
+/**
+ * \brief Checks if there's an RPC response for us, non-blockingly. This is
+ * meant for when the user wants to block until SDMA memcpy et al have been
+ * completed.
+ */
+bool sdma_rpc_check_for_response(struct sdma_rpc* rpc);
+/**
+ * \brief Blocks until there's an RPC response for us. This is meant for when
+ * the user wants to block until SDMA memcpy et al have been completed.
+ */
+errval_t sdma_rpc_wait_for_response(struct sdma_rpc* rpc);
+
+#endif /* _SDMA_RPC_H_ */

@@ -17,8 +17,8 @@
 
 #include <aos/aos.h>
 
-#define AOS_RPC_OK 0                // General-purpose OK message.
-#define AOS_RPC_FAILED 1            // RPC failure.
+#define AOS_RPC_OK         0        // General-purpose OK message.
+#define AOS_RPC_FAILED     1        // RPC failure.
 #define AOS_RPC_HANDSHAKE  1 << 2   // Message passed at handshake time.
 #define AOS_RPC_MEMORY     1 << 3   // ID for memory requests.
 #define AOS_RPC_NUMBER     1 << 5   // ID for send number requests.
@@ -29,8 +29,8 @@
 #define AOS_RPC_GET_PLIST  1 << 19  // ID for get process name requests.
 #define AOS_RPC_GETCHAR    1 << 21  // ID for getchar requests.
 #define AOS_RPC_DEVICE     1 << 23  // ID for get device cap requests.
-#define AOS_RPC_IRQ         1 << 27  // ID for get IRQ cap requests.
-
+#define AOS_RPC_IRQ        1 << 27  // ID for get IRQ cap requests.
+#define AOS_RPC_SDMA_EP    1 << 29  // ID for get SDMA endpoint requests.
 
 struct aos_rpc {
     struct lmp_chan lc;
@@ -63,6 +63,8 @@ errval_t aos_rpc_device_cap_send_handler(void* void_args);
 errval_t aos_rpc_device_cap_recv_handler(void* void_args);
 errval_t aos_rpc_irq_send_handler(void* void_args);
 errval_t aos_rpc_irq_recv_handler(void* void_args);
+errval_t aos_rpc_sdma_ep_send_handler(void* void_args);
+errval_t aos_rpc_sdma_ep_recv_handler(void* void_args);
 
 /**
  * \brief send a number over the given channel
@@ -141,6 +143,11 @@ errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc, lpaddr_t paddr, size_t byte
  * \brief Gets an interrupt (IRQ) capability.
  */
 errval_t aos_rpc_get_irq_cap(struct aos_rpc* rpc, struct capref* retcap);
+
+/**
+ * \brief Gets a cap to the SDMA driver endpoint.
+ */
+errval_t aos_rpc_get_sdma_ep_cap(struct aos_rpc* rpc, struct capref* retcap);
 
 /**
  * \brief Initialize given rpc channel.

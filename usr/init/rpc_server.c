@@ -93,8 +93,13 @@ errval_t serve_locally(struct lmp_recv_msg* msg, struct capref* cap,
                     *clients);
             break;
         case AOS_RPC_IRQ:
-            response = (void*) send_irq_cap;
+            response = (void*) send_cap;
             response_args = process_local_irq_cap_request(msg, cap, *clients);
+            break;
+        case AOS_RPC_SDMA_EP:
+            response = (void*) send_cap;
+            response_args = process_local_sdma_ep_cap_request(msg, cap,
+                    *clients);
             break;
       
         default:
@@ -123,6 +128,12 @@ void* process_local_handshake_request(struct capref* request_cap,
             sizeof(struct client_state));
     if (*clients == NULL) {
         new_client->next = new_client->prev = NULL;
+        // The first RPC client is the SDMA driver (trusted by init), thus save
+        // the cap to a well-known place.
+        errval_t err = cap_copy(cap_sdma_ep, *request_cap);
+        if (err_is_fail(err)) {
+            USER_PANIC_ERR(err, "failed to copy cap_sdma_ep");
+        }
     } else {
         (*clients)->prev = new_client;
         new_client->next = *clients;
@@ -626,6 +637,40 @@ void* process_local_irq_cap_request(struct lmp_recv_msg* msg,
     return return_args;
 }
 
+void* process_local_sdma_ep_cap_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients)
+{
+   struct client_state* client = identify_client(request_cap, clients);
+    if (client == NULL) {
+        debug_printf("ERROR: process_local_sdma_ep_cap_request: could not "
+                "identify client\n");
+        return NULL;
+    }
+
+    struct capref sdma_ep_cap;
+    errval_t err = rpc_sdma_ep_cap(&sdma_ep_cap);
+
+    // Response args.
+    size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+            + ROUND_UP(sizeof(errval_t), 4)
+            + ROUND_UP(sizeof(struct capref), 4);
+    void* args = malloc(args_size);
+    void* return_args = args;
+
+    // 1. Channel to send down.
+    *((struct lmp_chan*) args) = client->lc;
+    
+    // 2. Error code from rpc_sdma_ep_cap.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
+    *((errval_t*) args) = err;
+
+    // 3. IRQ cap.
+    args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
+    *((struct capref*) args) = sdma_ep_cap;
+
+    return return_args;
+}
+
 errval_t send_handshake(void* args)
 {
     // 1. Get channel to send down.
@@ -935,7 +980,7 @@ errval_t send_device_cap(void* args)
     return SYS_ERR_OK;
 }
 
-errval_t send_irq_cap(void* args)
+errval_t send_cap(void* args)
 {
     //1. Get channel to send down.
     struct lmp_chan* lc = (struct lmp_chan*) args;
@@ -944,7 +989,7 @@ errval_t send_irq_cap(void* args)
     args = (void*) ROUND_UP((uintptr_t) args + sizeof(struct lmp_chan), 4);
     errval_t* err = (errval_t*) args;
 
-    // 3. Get IRQ cap.
+    // 3. Get cap to send.
     args = (void*) ROUND_UP((uintptr_t) args + sizeof(errval_t), 4);
     struct capref* retcap = (struct capref*) args;
 

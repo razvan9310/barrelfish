@@ -707,9 +707,13 @@ errors liburpc URPC_ERR_ {
 
 // errors in sdma lib
 errors libsdma SDMA_ERR_ {
-    failure MISALIGNED  "Misaligned address for SDMA",
-    failure SUPERVISOR  "SDMA supervisor error",
-    failure TRANSFER    "SDMA transfer error",
+    failure MISALIGNED          "Misaligned address for SDMA",
+    failure SUPERVISOR          "SDMA supervisor error",
+    failure TRANSFER            "SDMA transfer error",
+    failure RPC_CODE            "Invalid SDMA RPC code",
+    failure NO_AVAIL_CHANNEL    "No channel available",
+    failure REQUEST_IN_PROGRESS "An SDMA request is already in progress",
+    failure MEMCPY              "Bad memcpy request",
 };
 
 // errors in init

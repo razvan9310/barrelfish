@@ -19,11 +19,30 @@
 #include <aos/aos_rpc.h>
 #include <aos/inthandler.h>
 #include <dev/omap/omap44xx_sdma_dev.h>
+#include <sdma/sdma_rpc.h>
 
 #define SDMA_IRQ_LINE_0 (32 + 12)
 #define SDMA_CHANNELS   32
 
+#define CAP_MASK_SRC   1
+#define CAP_MASK_DST   2
+#define CAP_MASK_READY 3
+
 typedef size_t chanid_t;
+
+struct client_state {
+    struct lmp_chan lc;  		// LMP channel.
+    struct EndPoint remote_ep;  // Used to identify clients for handshake.
+    
+    struct capref src;
+    struct capref dst;
+    uint8_t have_caps;
+    size_t len;
+
+    // Doubly-linked list.
+    struct client_state* next;
+    struct client_state* prev;
+};
 
 struct channel_state {
 	bool transfer_in_progress;  // Whether there's a transfer currently in
@@ -31,6 +50,8 @@ struct channel_state {
 	lpaddr_t src_addr;		    // Source address for transfer, if applicable.
 	lpaddr_t dst_addr;			// Destination address for transfer, if appl.
 	size_t size;                // Transfer size, if applicable.
+
+	struct lmp_chan out_lc;     // Channel to ping when transfer is complete. 
 
 	errval_t err;               // Error from last transfer attempt.
 };
@@ -40,11 +61,21 @@ struct sdma_driver {
 	lvaddr_t sdma_vaddr;
 	omap44xx_sdma_t sdma_dev;
 
+    // For incoming RPC requests.
+    struct lmp_chan lc;
+
 	// Channel state, 32 channels.
 	struct channel_state chan_state[SDMA_CHANNELS];
 
-	void* buf;  // Temporary testing.
+	// RPC clients.
+	struct client_state* clients;
 };
+
+/**
+ * \brief Identifies an RPC client from an incoming RPC cap.
+ */
+struct client_state* sdma_identify_client_cap(struct sdma_driver* sd,
+		struct capref* cap);
 
 /**
  * \brief Updates channel status from given IRQ status.
@@ -81,6 +112,52 @@ void sdma_interrupt_handler(void* arg);
  */
 errval_t sdma_setup_config(struct sdma_driver* sd);
 
-void sdma_test_copy(struct sdma_driver* sd, struct capref* frame);
+/**
+ * \brief Initializes the local (server-side) endpoint for SDMA RPC.
+ */
+errval_t sdma_setup_rpc_server(struct sdma_driver* sd);
+
+/**
+ * \brief Entry point for server-side SDMA processing.
+ */
+void sdma_serve_rpc(void* arg);
+
+/**
+ * \brief Processes an SDMA handshake request.
+ */
+void* sdma_process_handshake(struct sdma_driver* sd, struct capref* cap);
+/**
+ * \brief Processes an SDMA memcpy request.
+ */
+void* sdma_process_memcpy(struct sdma_driver* sd, struct client_state* client,
+        struct lmp_recv_msg* msg, struct capref* cap);
+
+/**
+ * \brief SDMA RPC handshake send handler.
+ */
+void sdma_send_handshake(void* arg);
+/**
+ * \brief SDMA RPC error status send handler.
+ */
+void sdma_send_err(void* arg);
+
+/**
+ * \brief Finds an available SDMA channel.
+ */
+chanid_t sdma_avail_channel(struct sdma_driver* sd);
+
+/**
+ * \brief Returns whether the given channel is valid, i.e. between 0 and 31.
+ */
+static inline bool sdma_valid_channel(chanid_t chan)
+{
+	return chan < SDMA_CHANNELS;
+}
+
+/**
+ * \brief Starts an SDMA job identified by the given (dst, src, len) tuple.
+ */
+errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
+        struct frame_identity src_id, struct frame_identity dst_id, size_t len);
 
 #endif /* _INIT_SDMA_H_ */

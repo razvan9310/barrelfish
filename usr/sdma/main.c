@@ -1,4 +1,5 @@
 #include <aos/aos.h>
+#include <aos/aos_rpc.h>
 #include <aos/paging.h>
 #include <aos/waitset.h>
 
@@ -24,25 +25,18 @@ int main(int argc, char** argv)
 		USER_PANIC_ERR(err, "sdma_setup_config failed");
 	}
 
-	struct capref frame;
-	size_t retsize;
-	err = frame_alloc(&frame, BASE_PAGE_SIZE, &retsize);
+	err = sdma_setup_rpc_server(&sd);
 	if (err_is_fail(err)) {
-		USER_PANIC_ERR(err, "frame_alloc BASE_PAGE_SIZE");
+		USER_PANIC_ERR(err, "sdma_setup_rpc_server failed");
 	}
 
-	err = paging_map_frame(get_current_paging_state(), &sd.buf, retsize, frame,
-			NULL, NULL);
-	if (err_is_fail(err)) {
-		USER_PANIC_ERR(err, "paging_map_frame failed");
-	}
-	char* cbuf = (char*) sd.buf;
-	for (size_t i = 0; i < 512; ++i) {
-		cbuf[i] = 'G';
-	}
-	sys_debug_flush_cache();
-
-	sdma_test_copy(&sd, &frame);
+	// Spawn sdma_test.
+	domainid_t pid;
+	err =  aos_rpc_process_spawn(get_init_rpc(), "sdma_test", 0, &pid);
+    if (err_is_fail(err)) {
+    	USER_PANIC_ERR(err, "aos_rpc_process_spawn failed");
+    }
+    debug_printf("Pid for sdma_test is %u\n", pid);
 
 	// Loop waiting for SDMA interrupts.
 	while(true) {

@@ -136,6 +136,14 @@ static inline errval_t rpc_irq_cap(struct capref* retcap)
     CHECK("rpc_irq_cap: allocating slot for retcap", slot_alloc(retcap));
     return cap_copy(*retcap, cap_irq);
 }
+/**
+ * \brief Returns the SDMA driver's endpoint capability.
+ */
+static inline errval_t rpc_sdma_ep_cap(struct capref* retcap)
+{
+    CHECK("rpc_sdma_ep_cap: allocating slot for retcap", slot_alloc(retcap));
+    return cap_copy(*retcap, cap_sdma_ep);
+}
 
 /**
  * \bief General-purpose local RPC server-side receive handler. This is the
@@ -198,6 +206,11 @@ void* process_local_device_cap_request(struct lmp_recv_msg* msg,
  */
 void* process_local_irq_cap_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients);
+/**
+ * \brief Processes a same-core get SDMA driver endpoint cap request.
+ */
+void* process_local_sdma_ep_cap_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients);
 
 /**
  * \brief Handshake response handler.
@@ -234,8 +247,8 @@ errval_t send_ps_list(void* args);
  */
 errval_t send_device_cap(void* args);
 /**
- * \brief IRQ cap response handler.
+ * \brief Send cap response handler.
  */
-errval_t send_irq_cap(void* args);
+errval_t send_cap(void* args);
 
 #endif /* _INIT_RPC_SERVER_H_ */

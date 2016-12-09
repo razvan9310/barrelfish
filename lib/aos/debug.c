@@ -81,7 +81,7 @@ errval_t debug_cap_identify(struct capref cap, struct capability *ret)
         return SYS_ERR_OK;
     }
 
-    return LIB_ERR_NOT_IMPLEMENTED;
+    return err;
 }
 
 /**

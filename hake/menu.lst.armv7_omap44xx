@@ -20,6 +20,7 @@ module /armv7/sbin/memeater
 
 # milestone 7 (sDMA)
 module /armv7/sbin/sdma
+module /armv7/sbin/sdma_test
 
 # For pandaboard, use following values.
 mmap map 0x40000000 0x40000000 13 # Devices

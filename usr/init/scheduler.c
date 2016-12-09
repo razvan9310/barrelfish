@@ -926,6 +926,7 @@ bool try_serving_locally(struct scheduler* sc, struct rpc_task* task,
             return true;
         case AOS_RPC_DEVICE:
         case AOS_RPC_IRQ:
+        case AOS_RPC_SDMA_EP:
             // These are always core-local.
             break;
         case AOS_RPC_MEMORY:

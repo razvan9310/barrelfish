@@ -16,7 +16,7 @@
                       	"sdma.c"
                       ],
                       addLinkFlags = [ "-e _start"],
-                      addLibraries = [ "driverkit" ],
+                      addLibraries = [ "driverkit", "omap_timer", "sdma_rpc" ],
                       architectures = allArchitectures,
                       mackerelDevices = [ "omap/omap44xx_sdma" ]
                     }

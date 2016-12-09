@@ -156,6 +156,12 @@ struct capref cap_sessionid = {
     .slot = TASKCN_SLOT_SESSIONID
 };
 
+/// SDMA endpoint
+struct capref cap_sdma_ep = {
+    .cnode = TASK_CNODE_INIT,
+    .slot = TASKCN_SLOT_SDMAEP
+};
+
 /// Root PML4 VNode
 struct capref cap_vroot = {
     .cnode = PAGE_CNODE_INIT,
