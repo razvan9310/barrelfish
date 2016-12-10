@@ -38,6 +38,8 @@ errval_t handle_grep(char *argc[], int argv);
 errval_t handle_oncore(char *argc[], int argv);
 errval_t handle_help(char *argc[], int argv);
 errval_t handle_mkdir(char *argc[], int argv);
+errval_t handle_rm(char *argc[], int argv);
+errval_t handle_rmdir(char *argc[], int argv);
 errval_t handle_clear(char *argc[], int argv);
 
 typedef void (*command_handler_fn)(char* const argc[], int argv);

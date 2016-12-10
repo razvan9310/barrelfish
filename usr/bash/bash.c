@@ -237,6 +237,18 @@ errval_t handle_mkdir(char *argc[], int argv)
 	return SYS_ERR_OK;
 }
 
+errval_t handle_rm(char *argc[], int argv)
+{
+	CHECK("Error in deleting file\n", rm(argc[1]));
+	return SYS_ERR_OK;
+}
+
+errval_t handle_rmdir(char *argc[], int argv)
+{
+	CHECK("Error in deleting folder\n", rmdir(argc[1]));
+	return SYS_ERR_OK;
+}
+
 errval_t handle_cd(char *argc[], int argv)
 {
 	if(argv != 2) {
@@ -443,6 +455,8 @@ errval_t handle_help(char *argc[], int argv)
 	SHELL_PRINTF(fout, "wc <name of file>\n");
 	SHELL_PRINTF(fout, "grep <pattern> <name of file>\n");
 	SHELL_PRINTF(fout, "mkdir <name of new folder\n");
+	SHELL_PRINTF(fout, "rmdir <name of new folder\n");
+	SHELL_PRINTF(fout, "rm <name of file\n");
 	return SYS_ERR_OK;
 }
 
@@ -505,6 +519,8 @@ errval_t sanitize_input(char *ip)
 				return BASH_ERR_SYNTAX;
 			}else {
 				fout = fopen(argc[j+1], "a");
+				int t = fseek(fout, -1, SEEK_END);
+				printf("%d\n", t);
 				if(fout == NULL) {
 					printf("Fuck me!!\n");
 				}
@@ -568,6 +584,10 @@ void execute_command(char *argc[], int argv)
 			handle_mkdir(argc, argv);
 		}else if(strncmp(argc[0], "clear", 5) == 0){
 			handle_clear(argc, argv);
+		}else if(strncmp(argc[0], "rmdir", 5) == 0){
+			handle_rmdir(argc, argv);
+		}else if(strncmp(argc[0], "rm", 2) == 0){
+			handle_rm(argc, argv);
 		}
 	}
 }
