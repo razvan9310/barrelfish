@@ -65,10 +65,7 @@ void clean_buffer(void)
 	free(input);
 	pos = 0;
 	if(inputRedirect>0) fclose(fin);
-	if(outputRedirect>0) {
-		debug_printf("I am here\n");
-		fclose(fout);
-	}
+	if(outputRedirect>0) fclose(fout);
 	inputRedirect = 0;
 	outputRedirect = 0;
 	buf_size = 16;
@@ -81,7 +78,7 @@ static void terminal_read_handler(void *params)
 {
 	aos_rpc_serial_getchar(get_init_rpc(), (input+pos));
 	if(*(input+pos) == '\r') {
-		*(input+pos) = '\0';
+		*(input+pos) = 0;
 		sanitize_input(input);
 	}else {
 		if(*(input+pos) != '\t'){
@@ -400,24 +397,32 @@ errval_t handle_grep(char *argc[], int argv)
 errval_t handle_oncore(char *argc[], int argv)
 {
 	domainid_t newpid;
-	coreid_t core = atoi(argc[1]);
-	uint32_t all_args = 0;
-	for(int i=2; i<argv; i++) {
-		all_args += strlen(argc[i]);
-	}
-	char *proc_name = malloc(all_args+(argv-1));
-	memset(proc_name, 0, all_args+(argv-1));
-	strncpy(proc_name, argc[2], strlen(argc[2]));
-	strcat(proc_name, " ");
-	for(int i=3; i<argv; i++) {
-		strcat(proc_name, argc[i]);
+	if(argv <= 2) {
+		printf("Correct Syntax for oncore is oncore <coreid> <proc_name> <proc_args>\n");
+		return BASH_ERR_SYNTAX;
+	}else if(argv == 3) {
+		coreid_t core = atoi(argc[1]);
+		CHECK("Trying to spawn with arguments",
+			aos_rpc_process_spawn(get_init_rpc(), argc[2], core, &newpid));
+	}else {
+		coreid_t core = atoi(argc[1]);
+		uint32_t all_args = 0;
+		for(int i=2; i<argv; i++) {
+			all_args += strlen(argc[i]);
+		}
+		char *proc_name = malloc(all_args+(argv-1));
+		memset(proc_name, 0, all_args+(argv-1));
+		strncpy(proc_name, argc[2], strlen(argc[2]));
 		strcat(proc_name, " ");
-	}
+		for(int i=3; i<argv; i++) {
+			strcat(proc_name, argc[i]);
+			strcat(proc_name, " ");
+		}
 
-	debug_printf("Length of all args are: %s\n", proc_name);
-	CHECK("Trying to spawn with arguments",
-		aos_rpc_process_spawn_args(get_init_rpc(), proc_name, core, &newpid));
-	free(proc_name);
+		CHECK("Trying to spawn with arguments",
+			aos_rpc_process_spawn_args(get_init_rpc(), proc_name, core, &newpid));
+		free(proc_name);
+	}
 	return SYS_ERR_OK;
 }
 
@@ -532,42 +537,43 @@ void execute_command(char *argc[], int argv)
 		- [OK] grep
 		- [OK] mkdir
 	*/
-	if(strncmp(argc[0], "echo", 4) == 0) {
-		handle_echo(argc, argv);
-	}else if(strncmp(argc[0], "led", 3) == 0){
-		handle_light_led(argc, argv);
-	}else if(strncmp(argc[0], "threads", 7) == 0){
-		handle_threads(argc, argv);
-	}else if(strncmp(argc[0], "memtest", 7) == 0){
-		handle_memtest(argc, argv);
-	}else if(strncmp(argc[0], "oncore", 6) == 0){
-		handle_oncore(argc, argv);
-	}else if(strncmp(argc[0], "ps", 2) == 0){
-		handle_ps(argc, argv);
-	}else if(strncmp(argc[0], "help", 4) == 0){
-		handle_help(argc, argv);
-	}else if(strncmp(argc[0], "pwd", 3) == 0){
-		handle_pwd(argc, argv);
-	}else if(strncmp(argc[0], "cd", 2) == 0){
-		handle_cd(argc, argv);
-	}else if(strncmp(argc[0], "ls", 2) == 0){
-		handle_ls(argc, argv);
-	}else if(strncmp(argc[0], "cat", 3) == 0){
-		handle_cat(argc, argv);
-	}else if(strncmp(argc[0], "wc", 2) == 0){
-		handle_wc(argc, argv);
-	}else if(strncmp(argc[0], "grep", 4) == 0){
-		handle_grep(argc, argv);
-	}else if(strncmp(argc[0], "mkdir", 5) == 0){
-		handle_mkdir(argc, argv);
-	}else if(strncmp(argc[0], "clear", 5) == 0){
-		handle_clear(argc, argv);
+	if(argv > 0) {
+		if(strncmp(argc[0], "echo", 4) == 0) {
+			handle_echo(argc, argv);
+		}else if(strncmp(argc[0], "led", 3) == 0){
+			handle_light_led(argc, argv);
+		}else if(strncmp(argc[0], "threads", 7) == 0){
+			handle_threads(argc, argv);
+		}else if(strncmp(argc[0], "memtest", 7) == 0){
+			handle_memtest(argc, argv);
+		}else if(strncmp(argc[0], "oncore", 6) == 0){
+			handle_oncore(argc, argv);
+		}else if(strncmp(argc[0], "ps", 2) == 0){
+			handle_ps(argc, argv);
+		}else if(strncmp(argc[0], "help", 4) == 0){
+			handle_help(argc, argv);
+		}else if(strncmp(argc[0], "pwd", 3) == 0){
+			handle_pwd(argc, argv);
+		}else if(strncmp(argc[0], "cd", 2) == 0){
+			handle_cd(argc, argv);
+		}else if(strncmp(argc[0], "ls", 2) == 0){
+			handle_ls(argc, argv);
+		}else if(strncmp(argc[0], "cat", 3) == 0){
+			handle_cat(argc, argv);
+		}else if(strncmp(argc[0], "wc", 2) == 0){
+			handle_wc(argc, argv);
+		}else if(strncmp(argc[0], "grep", 4) == 0){
+			handle_grep(argc, argv);
+		}else if(strncmp(argc[0], "mkdir", 5) == 0){
+			handle_mkdir(argc, argv);
+		}else if(strncmp(argc[0], "clear", 5) == 0){
+			handle_clear(argc, argv);
+		}
 	}
 }
 
 int main(int argc, char *argv[])
 {
-	debug_printf("$$$$$$ Number of args are %d %s %s %s\n",argc, argv[0], argv[1], argv[2]);
 	filesystem_init();
 	fin = stdin;
 	fout = stdout;
