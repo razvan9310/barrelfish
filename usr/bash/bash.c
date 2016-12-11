@@ -226,7 +226,7 @@ errval_t handle_ls(char *argc[], int argv)
 	opendir(wd, &ent);
 	char *name;
 	while((readdir(ent, &name)) == SYS_ERR_OK) {
-		SHELL_PRINTF(fout, "%s\r\n", name);
+		SHELL_PRINTF(fout, "%s\n", name);
 	}
 	return SYS_ERR_OK;
 }
@@ -255,21 +255,60 @@ errval_t handle_cd(char *argc[], int argv)
 		printf("Correct Syntax for cd is: cd <name of directory>\n");
 		return BASH_ERR_SYNTAX;
 	}
-	if(strlen(wd) == (max_len_wd-1)) {
-		//max_len_wd = max(2*max_len_wd, max_len_wd)
+	if(strlen(wd)+strlen(argc[1]) >= (max_len_wd-1)) {
+		max_len_wd = max(2*max_len_wd, strlen(wd)+strlen(argc[1]));
 		wd = realloc(wd, 2*max_len_wd);
-		max_len_wd = 2*max_len_wd;
 	}
-	for(int i=0; i < strlen(argc[1]); i++) {
-		wd[pos_wd] = argc[1][i];
+	if(strncmp(argc[1], "..", 2) == 0) {
+		if (pos_wd == 1) return SYS_ERR_OK;
+		pos_wd-=2;
+		wd[pos_wd] = '\0';
+		pos_wd--;
+		while(wd[pos_wd] != '/') {
+			wd[pos_wd] = '\0';
+			pos_wd--;
+		}
+		pos_wd++;
+	}else {
+		strcat(wd, argc[1]);
+		pos_wd+=strlen(argc[1]);
+
+		if(wd[pos_wd] != '/') {
+			wd[pos_wd] = '/';
+			pos_wd++;
+		}
 		pos_wd++;
 	}
-	if(wd[pos_wd] != '/') {
-		wd[pos_wd] = '/';
-		pos_wd++;
-	}
-	pos_wd++;
 	//strcat(wd, argc[1]);
+	return SYS_ERR_OK;
+}
+
+static errval_t private_cd(char *name)
+{
+	if(strlen(wd)+strlen(name) >= (max_len_wd-1)) {
+		max_len_wd = max(2*max_len_wd, strlen(wd)+strlen(name));
+		wd = realloc(wd, 2*max_len_wd);
+	}
+	if(strncmp(name, "..", 2) == 0) {
+		if (pos_wd == 1) return SYS_ERR_OK;
+		pos_wd-=2;
+		wd[pos_wd] = '\0';
+		pos_wd--;
+		while(wd[pos_wd] != '/') {
+			wd[pos_wd] = '\0';
+			pos_wd--;
+		}
+		pos_wd++;
+	}else {
+		strcat(wd, name);
+		pos_wd+=strlen(name);
+		if(wd[pos_wd] != '/') {
+			wd[pos_wd] = '/';
+			pos_wd++;
+		}
+		pos_wd++;
+	}
+	//strcat(wd, name);
 	return SYS_ERR_OK;
 }
 
@@ -349,7 +388,7 @@ int grep(char *regexp, FILE *f, char *name)
 		if (match(regexp, buf)) {
 			nmatch++;
 			if (name != NULL)
-				SHELL_PRINTF(fout, "%s:", name);
+				SHELL_PRINTF(fout, "%s: ", name);
 			SHELL_PRINTF(fout, "%s\n", buf);
 		}
 	}
@@ -394,14 +433,40 @@ int matchstar(int c, char *regexp, char *text)
 
 errval_t handle_grep(char *argc[], int argv)
 {
-	FILE *fp;
-	fp = fopen(argc[2], "r");
-	if(fp == NULL) {
-		printf("No file named: %s\n", argc[2]);
-		return BASH_ERR_FILE_NOT_FOUND;
+	if(strncmp(argc[1], "-r", 2) == 0){
+		fs_dirhandle_t ent;
+		CHECK("Open pwd", opendir(wd, &ent));
+		char *name;
+		while((readdir(ent, &name)) == SYS_ERR_OK) {
+			private_cd(name);
+			fs_dirhandle_t temp;
+			errval_t err = opendir(wd, &temp);
+			if(err == SYS_ERR_OK) {
+				handle_grep(argc, argv);
+			}else {
+				FILE *fp;
+				wd[pos_wd-2] = '\0';
+				fp = fopen(wd, "r");
+				if(fp == NULL) {
+					printf("No file named: %s\n", wd);
+					return BASH_ERR_FILE_NOT_FOUND;
+				}
+				grep(argc[2], fp, wd);
+				fclose(fp);
+				wd[pos_wd-2] = '/';
+			}
+			private_cd("..");
+		}
+	}else {
+		FILE *fp;
+		fp = fopen(argc[2], "r");
+		if(fp == NULL) {
+			printf("No file named: %s\n", argc[2]);
+			return BASH_ERR_FILE_NOT_FOUND;
+		}
+		grep(argc[1], fp, argc[2]);
+		fclose(fp);
 	}
-	grep(argc[1], fp, NULL);
-	fclose(fp);
 
 	return SYS_ERR_OK;
 }
@@ -454,9 +519,9 @@ errval_t handle_help(char *argc[], int argv)
 	SHELL_PRINTF(fout, "cat <name of file>\n");
 	SHELL_PRINTF(fout, "wc <name of file>\n");
 	SHELL_PRINTF(fout, "grep <pattern> <name of file>\n");
-	SHELL_PRINTF(fout, "mkdir <name of new folder\n");
-	SHELL_PRINTF(fout, "rmdir <name of new folder\n");
-	SHELL_PRINTF(fout, "rm <name of file\n");
+	SHELL_PRINTF(fout, "mkdir <name of new folder>\n");
+	SHELL_PRINTF(fout, "rmdir <name of new folder>\n");
+	SHELL_PRINTF(fout, "rm <name of file>\n");
 	return SYS_ERR_OK;
 }
 
@@ -542,7 +607,7 @@ void execute_command(char *argc[], int argv)
 		- [OK] led
 		- [OK] threads
 		- [OK] memtest
-		- oncore
+		- [OK] oncore
 		- [OK] ps
 		- [OK] help
 		- [OK] pwd
@@ -607,6 +672,11 @@ int main(int argc, char *argv[])
 	fp = fopen("/file.txt", "w+");
 	fprintf(fp, "%s %s\n", "Hello", "World");
 	fprintf(fp, "%s %s\n", "Hello1", "World");
+	fclose(fp);
+	mkdir("/hello");
+	fp = fopen("/hello/file1.txt", "w+");
+	fprintf(fp, "%s %s\n", "Hello new", "World");
+	fprintf(fp, "%s %s\n", "Hello1 new", "World");
 	fclose(fp);
 
 	errval_t err;
