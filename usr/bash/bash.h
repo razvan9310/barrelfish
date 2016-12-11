@@ -22,6 +22,7 @@ void clean_buffer(void);
 bool is_space(char c);
 errval_t sanitize_input(char *);
 void execute_command(char **argc, int argv);
+char** get_suggestion(char *command);
 
 // Command Functions
 errval_t handle_echo(char *argc[], int argv);
@@ -45,7 +46,7 @@ errval_t handle_clear(char *argc[], int argv);
 typedef void (*command_handler_fn)(char* const argc[], int argv);
 struct command_handler_entry
 {
-    const char* name;
+    char* name;
     command_handler_fn handler;
 };
 

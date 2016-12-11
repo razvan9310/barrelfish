@@ -43,9 +43,45 @@ FILE *fin;					  // File in
 // [OK] Move IRQ CAP to BASH Process
 // [OK] Redirect Input/Output to File
 // [] Pipe Commands
-// [] Tab to autocomplete
+// [OK] Tab to autocomplete
+
+
+static struct command_handler_entry commands[] = 
+			   {{.name = "mkdir",  	.handler = (void*) handle_mkdir},
+				{.name = "rmdir",  	.handler = (void*) handle_rmdir},
+				{.name = "help",   	.handler = (void*) handle_help},
+				{.name = "led",    	.handler = (void*) handle_light_led},
+				{.name = "oncore", 	.handler = (void*) handle_oncore},
+				{.name = "threads", .handler = (void*) handle_threads},
+				{.name = "cd", 		.handler = (void*) handle_cd},
+				{.name = "ls", 		.handler = (void*) handle_ls},
+				{.name = "memtest", .handler = (void*) handle_memtest},
+				{.name = "echo", 	.handler = (void*) handle_echo},
+				{.name = "ps", 		.handler = (void*) handle_ps},
+				{.name = "pwd", 	.handler = (void*) handle_pwd},
+				{.name = "cat", 	.handler = (void*) handle_cat},
+				{.name = "wc", 		.handler = (void*) handle_wc},
+				{.name = "grep", 	.handler = (void*) handle_grep},
+				{.name = "rm", 		.handler = (void*) handle_rm}};
 
 // Helper Functions:
+
+char** get_suggestion(char *command) 
+{
+	char **result;
+	result = malloc(16*sizeof(char *));
+	uint32_t commands_size = sizeof(commands)/sizeof(commands[0]);
+	uint32_t len = strlen(command);
+	int j = 0;
+	for(int i=0; i<commands_size; i++) {
+		if(strncmp(command, commands[i].name, len-1) == 0) {
+			result[j] = commands[i].name;
+			j++;
+		}
+	}
+	return result;
+}
+
 void do_backslash(void)
 {
 	aos_rpc_serial_putchar(get_init_rpc(), '\b');
@@ -100,9 +136,19 @@ static void terminal_read_handler(void *params)
 			}
 		}else {
 			printf("\n");
-			printf("gf");
+			printf("\033[2K\r");
+			char **result;
+			result = get_suggestion(input);
+			uint32_t mov_r = 4+strlen(input)+1;
+			uint32_t mov_l = 0;
+			while(*result){
+				SHELL_PRINTF(fout, "%s  ", *result);
+				mov_l+=(strlen(*result)+2);
+				result++;
+			}
 			printf("\033[1A");
-			printf("\033[4C");
+			printf("\033[%dD", mov_l);
+			printf("\033[%dC", mov_r);
 			fflush(stdout);
 		}
 	}
@@ -617,6 +663,8 @@ void execute_command(char *argc[], int argv)
 		- [Ok] wc
 		- [OK] grep
 		- [OK] mkdir
+		- [OK] rmdir
+		- [OK] rm
 	*/
 	if(argv > 0) {
 		if(strncmp(argc[0], "echo", 4) == 0) {
@@ -659,6 +707,7 @@ void execute_command(char *argc[], int argv)
 
 int main(int argc, char *argv[])
 {
+	debug_printf("size of commands %d\n", sizeof(commands)/sizeof(commands[0]));
 	filesystem_init();
 	fin = stdin;
 	fout = stdout;
@@ -708,11 +757,6 @@ int main(int argc, char *argv[])
 			abort();
 		}
 	}
-	// while(1) {
-	// 	SHELL_PRINTF("$bash>");
-	// 	get_command();
-	// 	aos_rpc_serial_putchar(get_init_rpc(), '\n');
-	// }
 	
 	return 0;
 }
