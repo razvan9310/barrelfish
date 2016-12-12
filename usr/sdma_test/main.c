@@ -46,16 +46,7 @@ int main(int argc, char** argv)
     }
     debug_printf("Alllocated dst frame\n");
 
-    // 6. Perform SDMA memcpy RPC.
-    size_t dst_offset = 0;
-    size_t src_offset = 0;
-    err = sdma_rpc_memcpy(&rpc, dst, dst_offset, src, src_offset, buf_size);
-    if (err_is_fail(err)) {
-        USER_PANIC_ERR(err, "sdma_rpc_memcpy faield");
-    }
-    debug_printf("SDMA memcpy request sent, awaiting post-copy ack...\n");
-
-    // 7. Map dst frame into vspace.
+    // 6. Map dst frame into vspace.
     void* dst_buf;
     err = paging_map_frame(get_current_paging_state(), &dst_buf, retsize, dst,
             NULL, NULL);
@@ -64,12 +55,23 @@ int main(int argc, char** argv)
     }
     debug_printf("Mapped dst frame into vspace at %p\n', dst_buf");
 
-    // 8. Wait for SDMA response.
-    err = sdma_rpc_wait_for_response(&rpc);
-    if (err_is_fail(err)) {
-        USER_PANIC_ERR(err, "sdma_rpc_wait_for_response failed");
+    // 7. Perform SDMA memcpy RPC.
+    size_t dst_offset = 0;
+    size_t src_offset = 0;
+    for (size_t i = 0; i < 32; ++i) {
+        err = sdma_rpc_memcpy(&rpc, dst, dst_offset, src, src_offset, buf_size);
+        if (err_is_fail(err)) {
+            USER_PANIC_ERR(err, "sdma_rpc_memcpy failed");
+        }
+        debug_printf("SDMA memcpy request sent, awaiting post-copy ack...\n");
+
+        // 8. Wait for SDMA response.
+        err = sdma_rpc_wait_for_response(&rpc);
+        if (err_is_fail(err)) {
+            USER_PANIC_ERR(err, "sdma_rpc_wait_for_response failed");
+        }
+        debug_printf("Got SDMA post-copy ack! Printing dst memory content:\n");
     }
-    debug_printf("Got SDMA post-copy ack! Printing dst memory content:\n");
 
     // 9. Print from mapped dst frame.
     char* dst_cbuf = (char*) dst_buf;

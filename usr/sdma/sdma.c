@@ -73,8 +73,9 @@ void sdma_interrupt_handler(void* arg)
     debug_printf("!!! Got SDMA interrupt!\n");
     struct sdma_driver* sd = (struct sdma_driver*) arg;
     uint8_t irq_line = 0;
-    sdma_update_channel_status(sd, irq_line,
-            omap44xx_sdma_dma4_irqstatus_line_rd(&sd->sdma_dev, irq_line));
+    uint32_t irq_status = omap44xx_sdma_dma4_irqstatus_line_rd(&sd->sdma_dev,
+            irq_line);
+    sdma_update_channel_status(sd, irq_line, irq_status);
 }
 
 errval_t sdma_setup_config(struct sdma_driver* sd)
@@ -86,29 +87,19 @@ errval_t sdma_setup_config(struct sdma_driver* sd)
     // 2. Configure GCR register.
     omap44xx_sdma_dma4_gcr_t gcr = omap44xx_sdma_dma4_gcr_rd(&sd->sdma_dev);
     // 2.1. max_channel_fifo_depth.
-    omap44xx_sdma_dma4_gcr_max_channel_fifo_depth_insert(gcr, 255);  // Maximum.
+    gcr = omap44xx_sdma_dma4_gcr_max_channel_fifo_depth_insert(gcr, 255);  // Maximum.
     // 2.2. arbitration_rate.
-    omap44xx_sdma_dma4_gcr_arbitration_rate_insert(gcr, 1);  // 1:1.
+    gcr = omap44xx_sdma_dma4_gcr_arbitration_rate_insert(gcr, 1);  // 1:1.
     // 2.3. Write back.
     omap44xx_sdma_dma4_gcr_wr(&sd->sdma_dev, gcr);
 
     // 3. Enable & clear IRQ lie 0.
     // 3.1. Enable IRQ line 0.
-    uint32_t enable_value = 4294967295u;
+    uint32_t enable_value = SDMA_IRQ_ENABLE_ALL;
     omap44xx_sdma_dma4_irqenable_wr(&sd->sdma_dev, 0, enable_value);
 
-    // 3.2. Clear IRQ line 0.
-    omap44xx_sdma_dma4_irqstatus_line_wr(&sd->sdma_dev, 0, 0);
-
-    // 4. CSR, IRQLINE and CICR for each channel.
+    // 3. CICR for each channel.
     for (chanid_t chan = 0; chan < SDMA_CHANNELS; ++chan) {
-        // 4.1. Clear CSR register.
-        omap44xx_sdma_dma4_csr_t csr = omap44xx_sdma_dma4_csr_rd(&sd->sdma_dev,
-                chan);
-        csr = 0x0;
-        omap44xx_sdma_dma4_csr_wr(&sd->sdma_dev, chan, csr);
-
-        // 4.2. Enable CICR interrupts.
         omap44xx_sdma_dma4_cicr_t cicr = omap44xx_sdma_dma4_cicr_rd(
                 &sd->sdma_dev, chan);
         cicr = omap44xx_sdma_dma4_cicr_misaligned_err_ie_insert(cicr, 1);
@@ -126,8 +117,10 @@ errval_t sdma_setup_rpc_server(struct sdma_driver* sd)
     sd->lc = get_init_rpc()->lc;
 
     static struct aos_rpc new_aos_rpc;
+    static struct waitset init_ws;
+    waitset_init(&init_ws);
     CHECK("initializing new aos_rpc_init",
-            aos_rpc_init(&new_aos_rpc, get_default_waitset()));
+            aos_rpc_init(&new_aos_rpc, &init_ws));
     set_init_rpc(&new_aos_rpc);
 
     CHECK("creating SDMA channel slot", lmp_chan_alloc_recv_slot(&sd->lc));
@@ -446,7 +439,6 @@ errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
     omap44xx_sdma_dma4_cssa_wr(&sd->sdma_dev, chan, (uint32_t) src_addr);
     // 4.3 Dst address.
     omap44xx_sdma_dma4_cdsa_wr(&sd->sdma_dev, chan, (uint32_t) dst_addr);
-    debug_printf("Copy src = %x, copy dst = %x\n", src_addr, dst_addr);
 
     // 5. CCR.
     // 5.1. R/W port addressing modes.
@@ -483,10 +475,22 @@ errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
     // 6.4. CDF.
     omap44xx_sdma_dma4_cdfi_wr(&sd->sdma_dev, chan, 1);
 
-    // 7. Start transfer!
+    // 7. IRQ status.
+    const int irq_line = 0;
+    omap44xx_sdma_dma4_irqstatus_line_wr(&sd->sdma_dev, irq_line, -1);
+
+    // 8. Clear CSR register.
+    omap44xx_sdma_dma4_csr_t csr = omap44xx_sdma_dma4_csr_rd(
+            &sd->sdma_dev, chan);
+    csr = 0x0;
+    omap44xx_sdma_dma4_csr_wr(&sd->sdma_dev, chan, csr);
+
+    // 9. Start transfer!
     ccr = omap44xx_sdma_dma4_ccr_rd(&sd->sdma_dev, chan);
     ccr = omap44xx_sdma_dma4_ccr_enable_insert(ccr, 1);
     omap44xx_sdma_dma4_ccr_wr(&sd->sdma_dev, chan, ccr);
+
+    sd->chan_state[chan].transfer_in_progress = true;
 
     return SYS_ERR_OK;
 }
@@ -547,8 +551,8 @@ void sdma_update_channel_status(struct sdma_driver* sd, uint8_t irq_line,
                         "lmp_chan_register_send in interrupt handler");
             }
 
-            // 7. Clear IRQ status.
-            omap44xx_sdma_dma4_irqstatus_line_wr(&sd->sdma_dev, irq_line, 0);
+            // 7. Clear CSR.
+            omap44xx_sdma_dma4_csr_wr(&sd->sdma_dev, chan, -1);
         }
     }
 }

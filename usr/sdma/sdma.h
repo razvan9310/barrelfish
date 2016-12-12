@@ -21,6 +21,8 @@
 #include <dev/omap/omap44xx_sdma_dev.h>
 #include <sdma/sdma_rpc.h>
 
+#define SDMA_IRQ_ENABLE_ALL 4294967295u
+
 #define SDMA_IRQ_LINE_0 (32 + 12)
 #define SDMA_CHANNELS   32
 
