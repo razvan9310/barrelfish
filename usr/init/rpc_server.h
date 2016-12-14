@@ -57,6 +57,15 @@ struct client_state {
     struct client_state* prev;
 };
 
+struct device_cap_node {
+    lpaddr_t base;
+    size_t bytes;
+    struct capref cap;
+
+    struct device_cap_node* prev;
+    struct device_cap_node* next;
+};
+
 struct system_ps {
     struct spawninfo process;
     domainid_t pid;

@@ -13,7 +13,7 @@
 [ build application { target = "sdma_test",
   		              cFiles = [ "main.c" ],
                       addLinkFlags = [ "-e _start"],
-                      addLibraries = [ "sdma_rpc" ],
+                      addLibraries = [ "omap_timer", "sdma_rpc" ],
                       architectures = allArchitectures
                     }
 ]

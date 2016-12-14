@@ -1,11 +1,15 @@
 #include <aos/aos.h>
+#include <aos/waitset.h>
+#include <omap_timer/timer.h>
 #include <sdma/sdma_rpc.h>
 
 int main(int argc, char** argv)
 {
     // 1. Connect to SDMA driver.
 	struct sdma_rpc rpc;
-	errval_t err = sdma_rpc_init(&rpc, get_default_waitset());
+    struct waitset sdma_ws;
+    waitset_init(&sdma_ws);
+	errval_t err = sdma_rpc_init(&rpc, &sdma_ws);
 	if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "sdma_rpc_init failed");
     }
@@ -27,10 +31,10 @@ int main(int argc, char** argv)
     if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "paging_map_frame src failed");
     }
-    debug_printf("Mapped src frame into vspace at %p\n', src_buf");
+    debug_printf("Mapped src frame into vspace at %p\n", src_buf);
 
     // 4. Write into src frame.
-    size_t buf_size = 399;
+    size_t buf_size = 512;
     char* src_cbuf = (char*) src_buf;
     for (size_t i = 0; i < buf_size; ++i) {
         src_cbuf[i] = 'U';
@@ -53,33 +57,51 @@ int main(int argc, char** argv)
     if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "paging_map_frame dst failed");
     }
-    debug_printf("Mapped dst frame into vspace at %p\n', dst_buf");
+    debug_printf("Mapped dst frame into vspace at %p\n", dst_buf);
 
     // 7. Perform SDMA memcpy RPC.
     size_t dst_offset = 0;
     size_t src_offset = 0;
-    for (size_t i = 0; i < 32; ++i) {
+    size_t num_mem_ops = 32;
+
+    omap_timer_init();
+    omap_timer_ctrl(true);
+    uint64_t timer_start = omap_timer_read();
+
+    for (size_t i = 0; i < num_mem_ops; ++i) {
         err = sdma_rpc_memcpy(&rpc, dst, dst_offset, src, src_offset, buf_size);
         if (err_is_fail(err)) {
             USER_PANIC_ERR(err, "sdma_rpc_memcpy failed");
         }
-        debug_printf("SDMA memcpy request sent, awaiting post-copy ack...\n");
+        // debug_printf("SDMA memcpy request sent, awaiting post-copy ack...\n");
 
         // 8. Wait for SDMA response.
         err = sdma_rpc_wait_for_response(&rpc);
         if (err_is_fail(err)) {
             USER_PANIC_ERR(err, "sdma_rpc_wait_for_response failed");
         }
-        debug_printf("Got SDMA post-copy ack! Printing dst memory content:\n");
+        // debug_printf("Got SDMA post-copy ack! Printing dst memory content:\n");
     }
+
+    uint64_t timer_end = omap_timer_read();
+    debug_printf("*** Time elapsed for %u SDMA ops: %llu\n", num_mem_ops,
+            timer_end - timer_start);
 
     // 9. Print from mapped dst frame.
     char* dst_cbuf = (char*) dst_buf;
-    for (size_t i = 0; i < 512; ++i) {
+    for (size_t i = 0; i < buf_size; ++i) {
         if (i % 128 == 0) {
             printf("\n");
         }
         printf("%c", dst_cbuf[i]);
     }
-    printf("\n");
+
+    timer_start = omap_timer_read();
+    for (size_t i = 0; i < num_mem_ops; ++i) {
+        memcpy(dst_buf, src_buf, buf_size);
+    }
+    timer_end = omap_timer_read();
+
+    printf("*** Time elapsed for %u standard memcpy ops: %llu\n", num_mem_ops,
+            timer_end - timer_start);
 }

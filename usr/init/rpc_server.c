@@ -551,6 +551,20 @@ void* process_local_get_process_list_request(struct lmp_recv_msg* msg,
 
 errval_t rpc_device_cap(lpaddr_t base, size_t bytes, struct capref* retcap)
 {
+    static struct device_cap_node* head = NULL;
+    struct device_cap_node* node = head;
+    while (node != NULL) {
+        if (node->base == base && node->bytes == bytes) {
+            break;
+        }
+        node = node->next;
+    }
+
+    if (node != NULL) {
+        *retcap = node->cap;
+        return SYS_ERR_OK;
+    }
+
     struct capref io_cap = {
         .cnode = cnode_task,
         .slot = TASKCN_SLOT_IO
@@ -562,6 +576,18 @@ errval_t rpc_device_cap(lpaddr_t base, size_t bytes, struct capref* retcap)
     CHECK("retyping IO cap into device cap",
             cap_retype(*retcap, io_cap, base - io_cap_id.base,
                     ObjType_DevFrame, bytes, 1));
+
+    node = (struct device_cap_node*) malloc(sizeof(struct device_cap_node));
+    node->base = base;
+    node->bytes = bytes;
+    node->cap = *retcap;
+    node->prev = NULL;
+    node->next = head;
+
+    if (head != NULL) {
+        head->prev = node;
+    }
+    head = node;
 
     return SYS_ERR_OK;
 }
