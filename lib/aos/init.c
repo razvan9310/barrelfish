@@ -165,7 +165,7 @@ static void handle_pagefault(int subtype,
 
     struct capref frame;
     size_t retsize;
-    err = frame_alloc(&frame, BASE_PAGE_SIZE, &retsize);
+    err = frame_alloc(&frame, 4 * BASE_PAGE_SIZE, &retsize);
     if (err_is_fail(err)) {
         debug_printf("Pagefault handler erred during frame_alloc: %s\n",
                 err_getstring(err));

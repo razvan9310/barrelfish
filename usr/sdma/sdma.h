@@ -26,6 +26,8 @@
 #define SDMA_IRQ_LINE_0 (32 + 12)
 #define SDMA_CHANNELS   32
 
+#define SDMA_REGISTER_CLEAN -1
+
 #define CAP_MASK_SRC   1
 #define CAP_MASK_DST   2
 #define CAP_MASK_READY 3

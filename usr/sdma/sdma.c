@@ -70,7 +70,7 @@ void sdma_initialize_driver(struct sdma_driver* sd)
 
 void sdma_interrupt_handler(void* arg)
 {
-    debug_printf("!!! Got SDMA interrupt!\n");
+    // debug_printf("!!! Got SDMA interrupt!\n");
     struct sdma_driver* sd = (struct sdma_driver*) arg;
     uint8_t irq_line = 0;
     uint32_t irq_status = omap44xx_sdma_dma4_irqstatus_line_rd(&sd->sdma_dev,
@@ -262,8 +262,13 @@ void sdma_send_handshake(void* arg)
     struct lmp_chan* lc = (struct lmp_chan*) arg;
 
     // 2. Send response.
-    errval_t err = lmp_chan_send1(lc, LMP_FLAG_SYNC, lc->local_cap,
-            SDMA_RPC_OK);
+    errval_t err;
+    size_t retries = 0;
+    do {
+        err = lmp_chan_send1(lc, LMP_FLAG_SYNC, lc->local_cap,
+                SDMA_RPC_OK);
+        ++retries;
+    } while (err_is_fail(err) && retries < 5);
     if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "lmp_chan_send handshake");
     }
@@ -359,13 +364,18 @@ void sdma_send_err(void* arg)
     size_t code = err_is_ok(*err) ? SDMA_RPC_OK : SDMA_RPC_FAILED;
 
     // 4. Send response.
-    errval_t send_err = lmp_chan_send2(lc, LMP_FLAG_SYNC, NULL_CAP, code, *err);
+    errval_t send_err;
+    size_t retries = 0;
+    do {
+        send_err = lmp_chan_send2(lc, LMP_FLAG_SYNC, NULL_CAP, code, *err);
+        ++retries;
+    } while (err_is_fail(send_err) && retries < 5);
     if (err_is_fail(send_err)) {
         USER_PANIC_ERR(send_err, "lmp_chan_send err");
     }
 
     // 5. Free args.
-    free(arg);
+    // free(arg);
 }
 
 chanid_t sdma_avail_channel(struct sdma_driver* sd)
@@ -397,9 +407,9 @@ errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
             omap44xx_sdma_DATA_TYPE_32BIT);
     // 1.2. R/W port access types (single vs burst).
     csdp = omap44xx_sdma_dma4_csdp_src_burst_en_insert(csdp,
-            omap44xx_sdma_BURST_EN_SINGLE);  // Single?
+            omap44xx_sdma_BURST_EN_64BYTE);  // 64-byte? Single?
     csdp = omap44xx_sdma_dma4_csdp_dst_burst_en_insert(csdp,
-            omap44xx_sdma_BURST_EN_SINGLE);  // Single?
+            omap44xx_sdma_BURST_EN_64BYTE);  // 64-byte? Single?
     // 1.3. Src/dst endianism.
     csdp = omap44xx_sdma_dma4_csdp_src_endian_insert(csdp,
             omap44xx_sdma_ENDIAN_LITTLE);  // Little-endian?
@@ -410,9 +420,9 @@ errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
             omap44xx_sdma_WRITE_MODE_LAST_NON_POSTED);
     // 1.5 Src/dst (non-)packed.
     csdp = omap44xx_sdma_dma4_csdp_src_packed_insert(csdp,
-            omap44xx_sdma_SRC_PACKED_DISABLE);  // Non-packed?
+            omap44xx_sdma_SRC_PACKED_ENABLE);  // Packed? Non-packed?
     csdp = omap44xx_sdma_dma4_csdp_dst_packed_insert(csdp,
-            omap44xx_sdma_SRC_PACKED_DISABLE);  // Non-packed?
+            omap44xx_sdma_SRC_PACKED_ENABLE);  // Packed? Non-packed?
     // 1.6 Write back reg value.
     omap44xx_sdma_dma4_csdp_wr(&sd->sdma_dev, chan, csdp);
 
@@ -477,7 +487,8 @@ errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
 
     // 7. IRQ status.
     const int irq_line = 0;
-    omap44xx_sdma_dma4_irqstatus_line_wr(&sd->sdma_dev, irq_line, -1);
+    omap44xx_sdma_dma4_irqstatus_line_wr(&sd->sdma_dev, irq_line,
+            SDMA_REGISTER_CLEAN);
 
     // 8. Clear CSR register.
     omap44xx_sdma_dma4_csr_t csr = omap44xx_sdma_dma4_csr_rd(
@@ -552,7 +563,7 @@ void sdma_update_channel_status(struct sdma_driver* sd, uint8_t irq_line,
             }
 
             // 7. Clear CSR.
-            omap44xx_sdma_dma4_csr_wr(&sd->sdma_dev, chan, -1);
+            omap44xx_sdma_dma4_csr_wr(&sd->sdma_dev, chan, SDMA_REGISTER_CLEAN);
         }
     }
 }

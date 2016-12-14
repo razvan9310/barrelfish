@@ -51,7 +51,7 @@ errval_t sdma_rpc_init(struct sdma_rpc* rpc, struct waitset* ws)
 
     // 2. Create local channel using SDMA driver as remote endpoint.
     CHECK("sdma_rpc_init: lmp_chan_accept",
-            lmp_chan_accept(&rpc->lc, DEFAULT_LMP_BUF_WORDS, cap_sdma_ep));
+            lmp_chan_accept(&rpc->lc, 100 * DEFAULT_LMP_BUF_WORDS, cap_sdma_ep));
 
     // 3. Marshal args.
     uintptr_t args = (uintptr_t) rpc;

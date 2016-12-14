@@ -39,10 +39,18 @@ int main(int argc, char** argv)
     debug_printf("Pid for sdma_test is %u\n", pid);
 
 	// Loop waiting for SDMA interrupts.
+	struct waitset* init_ws = get_init_rpc()->ws;
 	while(true) {
-		err = event_dispatch(get_default_waitset());
-		if (err_is_fail(err)) {
-			USER_PANIC_ERR(err, "event_dispatch");
+		// SDMA server waitset.
+		err = event_dispatch_non_block(get_default_waitset());
+		if (err_is_fail(err) && err != LIB_ERR_NO_EVENT) {
+			USER_PANIC_ERR(err, "event_dispatch_non_block on default ws");
+		}
+
+		// Init-only waitset.
+		err = event_dispatch_non_block(init_ws);
+		if (err_is_fail(err) && err != LIB_ERR_NO_EVENT) {
+			USER_PANIC_ERR(err, "event_dispatch_non_block on init ws");
 		}
 	}
 
