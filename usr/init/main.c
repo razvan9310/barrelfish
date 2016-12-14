@@ -120,10 +120,7 @@ int main(int argc, char *argv[])
         //                 my_core_id));
     }
 
-
-    if (my_core_id == 0) {
-        // TODO remove
-        debug_printf("==============================================\n");
+    if (my_core_id == 1) { // let's give something to do to core 1 too :D
         CHECK("spawning net",
                 spawn_load_by_name("net",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
