@@ -22,8 +22,12 @@ static void slip_finish_packet(packet_handler callback) {
     struct ip_packet *packet = (struct ip_packet *)malloc(sizeof(struct ip_packet));
     packet->len = slip_current_state.packet.len;
     memcpy(packet->bytes, slip_current_state.packet.bytes, packet->len);
-    ip_consume_packet(packet, callback);
+    memset(&slip_current_state, 0, sizeof(slip_current_state));
+    errval_t err = callback(packet);
     free(packet);
+    if (err_is_fail(err)) {
+        debug_printf("ERROR passing SLIP-decoded packet to callback: %s\n", err_getstring(err));
+    }
 }
 
 static void slip_add_byte(uint8_t r) {
@@ -72,4 +76,28 @@ void slip_decode(struct circ_buf *in_buf, packet_handler callback) {
             }
         }
     }
+}
+void slip_encode(struct circ_buf *out_buf, struct ip_packet *packet) {
+    static uint8_t buffer_with_slip_stuff[] = {SLIP_ESC, SLIP_END, SLIP_ESC_ESC, SLIP_ESC_END, SLIP_ESC_NUL}; // =(
+    //                                       0         1         2             3             4
+    for (int i = 0; i < packet->len; ++i) {
+        switch (packet->bytes[i]) {
+            case SLIP_END:
+                circ_buf_write(out_buf, buffer_with_slip_stuff, 1);
+                circ_buf_write(out_buf, buffer_with_slip_stuff+3, 1);
+                break;
+            case SLIP_ESC:
+                circ_buf_write(out_buf, buffer_with_slip_stuff, 1);
+                circ_buf_write(out_buf, buffer_with_slip_stuff+2, 1);
+                break;
+            case 0:
+                circ_buf_write(out_buf, buffer_with_slip_stuff, 1);
+                circ_buf_write(out_buf, buffer_with_slip_stuff+4, 1);
+                break;
+            default:
+                circ_buf_write(out_buf, &packet->bytes[i], 1);
+                break;
+        }
+    }
+    circ_buf_write(out_buf, buffer_with_slip_stuff+1, 1);
 }

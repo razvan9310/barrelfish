@@ -14,11 +14,15 @@
   {
     target = "net",
     cFiles = [ "main.c"
+             , "icmp.c"
              , "ip.c"
+             , "net.c"
              , "slip.c"
+             , "udp.c"
              , "util.c"
              , "/lib/netutil/user_serial_omap44xx.c"
              , "/lib/netutil/htons.c"
+             , "/lib/netutil/checksum.c"
              , "/lib/driverkit/map_devices.c"
              ]
   }

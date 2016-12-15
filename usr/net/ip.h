@@ -8,6 +8,7 @@
 
 #include <aos/aos.h>
 #include <stdlib.h>
+#include "net.h"
 
 // because statically allocated buffers are awesome :D
 #define MAX_PACKET_SIZE 1536
@@ -26,12 +27,14 @@ struct ip_header {
     uint8_t  options[];
 } __attribute__((packed));
 
-#define VER_MASK   = 0xf0;
-#define DSCP_MASK  = 0xfc;
-#define FLAGS_MASK = 0xe000;
-#define FLAGS_EVIL = 1<<(0+13);
-#define FLAGS_DF   = 1<<(1+13);
-#define FLAGS_MF   = 1<<(2+13);
+#define VER_MASK   0xf0
+#define DSCP_MASK  0xfc
+#define FLAGS_MASK 0xe000
+#define FLAGS_EVIL 1<<(0+13)
+#define FLAGS_DF   1<<(1+13)
+#define FLAGS_MF   1<<(2+13)
+
+#define IP_HEADER_LEN(packet) (4*(packet->header.ver_ihl & (~VER_MASK)))
 
 struct ip_packet {
     size_t len;
@@ -41,11 +44,8 @@ struct ip_packet {
     };
 };
 
-// packet will be freed after this function exits
-typedef void (*packet_handler)(struct ip_packet *packet);
-
-// checks the packet and passes to callback if it looks good
-// TODO probably shouldn't be told about what callback to use :D
-void ip_consume_packet(struct ip_packet *packet, packet_handler callback);
+errval_t ip_was_packet_good(struct ip_packet *packet);
+void ip_register_packet_dispatcher(packet_handler dispatcher);
+void ip_make_packet(struct ip_packet *packet, uint32_t src, uint32_t dst, uint8_t protocol, uint8_t *payload, size_t len);
 
 #endif

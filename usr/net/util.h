@@ -9,7 +9,9 @@
 #include <aos/aos.h>
 #include <stdlib.h>
 
-#define CIRC_BUF_SIZE 128 // because statically allocated buffers are awesome :D
+#define CHECKP(cond, message) CHECK(message " (check failed: "#cond")", (cond) ? SYS_ERR_OK : NET_ERR_INVALID_PACKET)
+
+#define CIRC_BUF_SIZE 1536 // because statically allocated buffers are awesome :D
 
 struct circ_buf {
     uint8_t buf[CIRC_BUF_SIZE];
