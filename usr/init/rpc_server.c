@@ -337,12 +337,34 @@ void* process_local_string_request(struct lmp_recv_msg* msg,
     return (void*) &client->lc;
 }
 
+void add_process_ps_list(char *name) {
+    struct system_ps* new_ps = (struct system_ps*) malloc(
+            sizeof(struct system_ps));
+    if (ps == NULL) {
+        new_ps->next = new_ps->prev = NULL;
+        new_ps->curr_size = 1;
+    } else {
+        ps->prev = new_ps;
+        new_ps->curr_size = ps->curr_size+1;
+        new_ps->next = ps;
+        new_ps->prev = NULL;
+    }
+
+    //Set process pid
+    new_ps->pid = last_issued_pid++;
+    new_ps->name = (char*) malloc(strlen(name) * sizeof(char));
+    strcpy(new_ps->name, name);
+    //Add process to process list
+    ps = new_ps;
+}
+
 errval_t rpc_spawn(char* name, domainid_t* pid)
 {
     if (strcmp(name, "init") == 0) {
         return SPAWN_ERR_FIND_SPAWNDS;
     }
 
+    debug_printf("Name of the process is: %s\n", name);
     struct system_ps* new_ps = (struct system_ps*) malloc(
             sizeof(struct system_ps));
     if (ps == NULL) {
@@ -424,7 +446,7 @@ void* process_local_spawn_args_request(struct lmp_recv_msg* msg,
     struct capref* request_cap, struct client_state* clients)
 {
     uint32_t remaining = msg->words[2];
-
+    debug_printf("remaining is %d\n", msg->words[2]);
     struct client_state* client = clients;
     while (client != NULL) {
         struct capability ret;
@@ -448,6 +470,7 @@ void* process_local_spawn_args_request(struct lmp_recv_msg* msg,
     size_t stop = remaining < 24 ? remaining : 24;
     for (size_t i = 0; i < stop; ++i) {
         uint32_t word = msg->words[3 + i / 4];
+        debug_printf("words are %s\n", word);
         client->spawn_buf[client->spawn_buf_idx++] =
                 (char) (word >> (8 * (i % 4)));
     }

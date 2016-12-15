@@ -42,6 +42,7 @@ errval_t handle_mkdir(char *argc[], int argv);
 errval_t handle_rm(char *argc[], int argv);
 errval_t handle_rmdir(char *argc[], int argv);
 errval_t handle_clear(char *argc[], int argv);
+errval_t handle_spawn(char *argc[], int argv);
 
 typedef void (*command_handler_fn)(char* const argc[], int argv);
 struct command_handler_entry

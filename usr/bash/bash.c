@@ -72,7 +72,7 @@ char** get_suggestion(char *command)
 	result = malloc(16*sizeof(char *));
 	uint32_t commands_size = sizeof(commands)/sizeof(commands[0]);
 	uint32_t len = strlen(command);
-	int j = 0;
+	uint32_t j = 0;
 	for(int i=0; i<commands_size; i++) {
 		if(strncmp(command, commands[i].name, len-1) == 0) {
 			result[j] = commands[i].name;
@@ -93,6 +93,8 @@ bool is_space(char c)
 {
 	if(c == ' ') return true;
 	else if(c == '\t') return true;
+	else if(c == '\n') return true;
+	else if(c == '\r') return true;
 	return false;
 }
 
@@ -230,7 +232,7 @@ static void thread_handle_memtest(void *params)
 	for(int i=0; i<*size; i++) {
 		*(a+i) = 'J';
 	}
-	SHELL_PRINTF(fout, "Result of memtest:\n %s\n", a);
+	SHELL_PRINTF(fout, "Result of memtest: %s\n", a);
 }
 
 errval_t handle_memtest(char *argc[], int argv)
@@ -397,7 +399,7 @@ errval_t handle_wc(char *argc[], int argv)
 		tot_chars++;
 		if (is_space(c)) {
 			in_space = 1;
-			if (c == '\n' || c == '\r') {
+			if (c == '\n') {
 				tot_lines++;
 			}
 		} else {
@@ -405,7 +407,7 @@ errval_t handle_wc(char *argc[], int argv)
 			in_space = 0;
 		}
 	}
-	if (last != '\n' || last == '\r') {
+	if (last != '\n') {
 		/* count last line if not linefeed terminated */
 		tot_lines++;
 	}
@@ -538,6 +540,35 @@ errval_t handle_oncore(char *argc[], int argv)
 		strncpy(proc_name, argc[2], strlen(argc[2]));
 		strcat(proc_name, " ");
 		for(int i=3; i<argv; i++) {
+			strcat(proc_name, argc[i]);
+			strcat(proc_name, " ");
+		}
+
+		CHECK("Trying to spawn with arguments",
+			aos_rpc_process_spawn_args(get_init_rpc(), proc_name, core, &newpid));
+		free(proc_name);
+	}
+	return SYS_ERR_OK;
+}
+
+errval_t handle_spawn(char *argc[], int argv)
+{
+	domainid_t newpid;
+	if(argv == 1) {
+		coreid_t core = 0;
+		CHECK("Trying to spawn with arguments",
+			aos_rpc_process_spawn(get_init_rpc(), argc[0], core, &newpid));
+	}else {
+		coreid_t core = 0;
+		uint32_t all_args = 0;
+		for(int i=1; i<argv; i++) {
+			all_args += strlen(argc[i]);
+		}
+		char *proc_name = malloc(all_args+(argv-1));
+		memset(proc_name, 0, all_args+(argv-1));
+		strncpy(proc_name, argc[0], strlen(argc[0]));
+		strcat(proc_name, " ");
+		for(int i=1; i<argv; i++) {
 			strcat(proc_name, argc[i]);
 			strcat(proc_name, " ");
 		}
@@ -701,6 +732,8 @@ void execute_command(char *argc[], int argv)
 			handle_rmdir(argc, argv);
 		}else if(strncmp(argc[0], "rm", 2) == 0){
 			handle_rm(argc, argv);
+		}else{
+			handle_spawn(argc, argv);
 		}
 	}
 }

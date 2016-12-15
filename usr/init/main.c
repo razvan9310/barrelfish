@@ -28,6 +28,7 @@
 #include "coreboot.h"
 #include "mem_alloc.h"
 #include "scheduler.h"
+#include "rpc_server.h"
 
 coreid_t my_core_id;
 struct bootinfo *bi;
@@ -110,7 +111,6 @@ int main(int argc, char *argv[])
         CHECK("reading modules from URPC",
                 read_modules(urpc_buf, bi, my_core_id));
     }
-
     // Initialize URPC for subsequent inter-core communication attempts.
     urpc_init(urpc_buf, my_core_id);
     CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, 
@@ -134,11 +134,14 @@ int main(int argc, char *argv[])
         CHECK("spawning bash",
                 spawn_load_by_name("bash",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+        add_process_ps_list("init");
+        add_process_ps_list("bash");
     } else {
-        // Spawn "Byebye" on core 1.
+        // //Spawn "Byebye" on core 1.
         // CHECK("spawning byebye",
         //         spawn_load_by_name("byebye",
         //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+        add_process_ps_list("init");
     }
     // while(true) {
 

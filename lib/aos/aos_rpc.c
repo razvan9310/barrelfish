@@ -477,7 +477,6 @@ errval_t aos_rpc_process_spawn_send_handler(void* void_args)
     // given channel and wait until the ack gets returned.
     struct aos_rpc*   rpc = (struct aos_rpc*) args[0];
     //coreid_t* core = (coreid_t*) args[1];
-
     errval_t err;
     size_t retries = 0;
     do {

@@ -68,6 +68,8 @@ struct system_ps {
     struct system_ps* prev;
 };
 
+void add_process_ps_list(char *name);
+
 /**
  * \brief Returns the client_state instance corresponding to the given client
  * capref.
