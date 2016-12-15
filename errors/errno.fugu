@@ -714,6 +714,8 @@ errors libsdma SDMA_ERR_ {
     failure NO_AVAIL_CHANNEL    "No channel available",
     failure REQUEST_IN_PROGRESS "An SDMA request is already in progress",
     failure MEMCPY              "Bad memcpy request",
+    failure MEMSET              "Bad memset request",
+    failure ROTATE              "Bad rotate request",
 };
 
 // errors in init

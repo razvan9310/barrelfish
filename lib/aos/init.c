@@ -87,7 +87,7 @@ static size_t syscall_terminal_write(const char *buf, size_t len)
 static size_t aos_terminal_write(const char* buf, size_t len)
 {
     if (len > 0) {
-        debug_printf("init.c: calling aos_rpc_send_string\n");
+        // debug_printf("init.c: calling aos_rpc_send_string\n");
         return aos_rpc_send_string(get_init_rpc(), buf, 0);
     }
     return 0;

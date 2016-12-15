@@ -23,6 +23,9 @@
 #define SDMA_RPC_HANDSHAKE  1 << 1
 #define SDMA_RPC_MEMCPY_SRC 1 << 2
 #define SDMA_RPC_MEMCPY_DST 1 << 3
+#define SDMA_RPC_MEMSET		1 << 5
+#define SDMA_RPC_ROTATE_SRC 1 << 7
+#define SDMA_RPC_ROTATE_DST 1 << 11
 
 struct sdma_rpc {
 	struct lmp_chan lc;
@@ -60,9 +63,36 @@ errval_t sdma_rpc_memcpy(struct sdma_rpc* rpc,
         size_t src_offset,
         size_t len);
 /**
+ * \brief SDMA RPC for memset (dst, dst_offset, len, value).
+ */
+errval_t sdma_rpc_memset(struct sdma_rpc* rpc,
+        struct capref dst,
+        size_t dst_offset,
+        size_t len,
+        uint8_t val);
+/**
+ * \brief SDMA RPC for rotate (dst, dst_offset, src_src_offset, width, height).
+ */
+errval_t sdma_rpc_rotate(struct sdma_rpc* rpc,
+        struct capref dst,
+        size_t dst_offset,
+        struct capref src,
+        size_t src_offset,
+        size_t width,
+        size_t height);
+
+/**
  * \brief Send handler for RPC memcpy.
  */
 errval_t sdma_rpc_memcpy_send_handler(void* void_args);
+/**
+ * \brief Send handler for RPC memset.
+ */
+errval_t sdma_rpc_memset_send_handler(void* void_args);
+/**
+ * \brief Send handler for RPC rotate.
+ */
+errval_t sdma_rpc_rotate_send_handler(void* void_args);
 /**
  * \brief Receive handler for RPC responses.
  */

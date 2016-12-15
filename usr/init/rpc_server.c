@@ -316,7 +316,7 @@ void* process_local_string_request(struct lmp_recv_msg* msg,
         // Print and reset.
         rpc_string(client->str_buf, client->str_buf_idx);
         client->str_buf_idx = 0;
-        free(clients->str_buf);
+        // free(clients->str_buf);
         client->str_buf = NULL;
     }
 
@@ -417,7 +417,7 @@ void* process_local_spawn_request(struct lmp_recv_msg* msg,
         *((domainid_t*) args) = pid;
         
         client->spawn_buf_idx = 0;
-        free(client->spawn_buf);
+        // free(client->spawn_buf);
         client->spawn_buf = NULL;
 
         return return_args;
@@ -748,7 +748,7 @@ errval_t send_memory(void* args)
                     *size));
 
     // 7 Free args.
-    free(args);
+    // free(args);
 
     return SYS_ERR_OK;
 }
@@ -769,7 +769,7 @@ errval_t send_serial_getchar(void* args)
                     *get_char));
 
     // 4. Free args.
-    free(args);
+    // free(args);
 
     return SYS_ERR_OK;
 }
@@ -1001,7 +1001,7 @@ errval_t send_device_cap(void* args)
             lmp_chan_send2(lc, LMP_FLAG_SYNC, *retcap, code, (uintptr_t) *err));
 
     // 7 Free args.
-    free(args);
+    // free(args);
 
     return SYS_ERR_OK;
 }
@@ -1027,7 +1027,7 @@ errval_t send_cap(void* args)
             lmp_chan_send2(lc, LMP_FLAG_SYNC, *retcap, code, *err));
 
     // 6. Free args.
-    free(args);
+    // free(args);
 
     return SYS_ERR_OK;
 }
