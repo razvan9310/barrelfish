@@ -8,7 +8,7 @@
 
 #include <aos/aos.h>
 #include <stdlib.h>
-#include "net.h"
+#include "stack.h"
 
 // because statically allocated buffers are awesome :D
 #define MAX_PACKET_SIZE 1536

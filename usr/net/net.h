@@ -9,16 +9,16 @@
 #include <aos/aos.h>
 #include <stdlib.h>
 
-struct ip_packet; // defined in ip.h; here an opaque forward-declaration
+typedef void (*socket_receive_callback)(uint32_t src4, uint16_t sport, uint8_t *buf, size_t len);
 
-typedef errval_t (*packet_handler)(struct ip_packet *packet);
+/**
+ * \brief Send data over a previously-opened UDP socket.
+ */
+errval_t socket_send(struct capref socket, uint32_t dst4, uint16_t dport, void* buf, size_t len);
 
-errval_t pass_transport_to_ip(uint32_t src, uint32_t dst, uint8_t protocol, uint8_t *payload, size_t len);
-errval_t pass_ip_to_link(struct ip_packet *packet);
-
-errval_t pass_link_to_ip(struct ip_packet *packet);
-errval_t pass_ip_to_transport(uint32_t src, uint32_t dst, uint8_t protocol, uint8_t *payload, size_t len);
-
-// errval_t send_raw_ip_packet(uint32_t src, uint32_t dst, uint8_t protocol, uint8_t *payload, size_t len);
+/**
+ * \brief Subscribe for receiving data (asynchronously).
+ */
+errval_t socket_listen(struct capref socket, socket_receive_callback cb);
 
 #endif

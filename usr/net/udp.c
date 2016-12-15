@@ -1,4 +1,4 @@
-#include "net.h"
+#include "stack.h"
 #include "udp.h"
 #include "util.h"
 #include <netutil/checksum.h>
@@ -53,7 +53,7 @@ errval_t udp_send(uint32_t fd, uint32_t dst4, uint16_t dport, void* buf, size_t 
     memcpy(d->data, buf, len);
     assert(!err_is_fail(good(d, payload_len)));
     CHECK("sending UDP packet",
-          send_packet(open_sockets[fd].laddr, dst4, PROTOCOL_UDP, (uint8_t *)d, payload_len));
+          pass_transport_to_ip(open_sockets[fd].laddr, dst4, PROTOCOL_UDP, (uint8_t *)d, payload_len));
     free(d);
     return SYS_ERR_OK;
 }

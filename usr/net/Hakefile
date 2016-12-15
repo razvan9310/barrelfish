@@ -18,6 +18,7 @@
              , "ip.c"
              , "net.c"
              , "slip.c"
+             , "stack.c"
              , "udp.c"
              , "util.c"
              , "/lib/netutil/user_serial_omap44xx.c"

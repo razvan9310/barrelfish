@@ -102,7 +102,7 @@ static void udp_echo_server_recv(uint32_t src4, uint16_t sport, uint8_t *data, s
 }
 
 static void udp_echo_server_subscribe(void) {
-    assert(!err_is_fail(udp_get_socket(MY_IP, 47, udp_echo_server_recv, &udp_echo_server_socket)));
+    assert(!err_is_fail(udp_socket_open(MY_IP, 47, udp_echo_server_recv, &udp_echo_server_socket)));
 }
 
 int main(int argc, char *argv[])

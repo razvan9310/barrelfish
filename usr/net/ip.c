@@ -38,7 +38,7 @@ errval_t pass_link_to_ip(struct ip_packet *packet) {
     return ip_packet_dispatcher(packet);
 }
 
-void make_packet(struct ip_packet *packet, uint32_t src, uint32_t dst, uint8_t protocol, uint8_t *payload, size_t len) {
+void ip_make_packet(struct ip_packet *packet, uint32_t src, uint32_t dst, uint8_t protocol, uint8_t *payload, size_t len) {
     memset((void*)&packet->header, 0, sizeof(struct ip_header));
     uint8_t header_len = sizeof(struct ip_header); // OPTIONS not supported
     packet->len = header_len + len;

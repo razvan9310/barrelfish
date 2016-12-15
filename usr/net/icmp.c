@@ -8,7 +8,7 @@
 #include <netutil/htons.h>
 #include <netutil/checksum.h>
 #include "icmp.h"
-#include "net.h"
+#include "stack.h"
 #include "util.h"
 
 static errval_t good(struct icmp_datagram *datagram, size_t len) {
@@ -31,7 +31,7 @@ static errval_t handle_echo_request(uint32_t src, uint32_t dst, struct icmp_data
 
     // TODO
     // CHECK("replying to ICMP ECHO", send_packet(dst, src, PROTOCOL_ICMP, (uint8_t*)reply, len));
-    CHECK("replying to ICMP ECHO", send_packet(dst, src, PROTOCOL_ICMP, (uint8_t*)reply, len));
+    CHECK("replying to ICMP ECHO", pass_transport_to_ip(dst, src, PROTOCOL_ICMP, (uint8_t*)reply, len));
 
     free(reply);
     return true;
