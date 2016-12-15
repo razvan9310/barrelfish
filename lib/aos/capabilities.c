@@ -162,6 +162,12 @@ struct capref cap_sdma_ep = {
     .slot = TASKCN_SLOT_SDMAEP
 };
 
+/// networking endpoint
+struct capref cap_net_ep = {
+    .cnode = TASK_CNODE_INIT,
+    .slot = TASKCN_SLOT_NETEP
+};
+
 /// Root PML4 VNode
 struct capref cap_vroot = {
     .cnode = PAGE_CNODE_INIT,

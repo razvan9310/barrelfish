@@ -15,11 +15,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include <aos/aos.h>
 #include <aos/aos_rpc.h>
-#include <aos/waitset.h>
-#include <aos/paging.h>
 #include <omap44xx_map.h> // for the serial's physical address
 #include <netutil/user_serial.h>
 #include <driverkit/driverkit.h>
@@ -92,6 +91,8 @@ void serial_input(uint8_t *buf, size_t len) {
     slip_decode(&in_buf, &pass_link_to_ip);
 }
 
+///// echo server /////
+
 static uint32_t udp_echo_server_socket;
 
 // for now it is here, TODO separate domain
@@ -102,8 +103,28 @@ static void udp_echo_server_recv(uint32_t src4, uint16_t sport, uint8_t *data, s
 }
 
 static void udp_echo_server_subscribe(void) {
-    assert(!err_is_fail(udp_socket_open(MY_IP, 47, udp_echo_server_recv, &udp_echo_server_socket)));
+    assert(!err_is_fail(udp_socket_open(MY_IP, 42, udp_echo_server_recv, &udp_echo_server_socket)));
 }
+
+///// end echo server /////
+
+///// SHOUT server /////
+
+static uint32_t udp_SHOUT_server_socket;
+
+// for now it is here, TODO separate domain
+static void udp_SHOUT_server_recv(uint32_t src4, uint16_t sport, uint8_t *data, size_t len) {
+    debug_printf("Got %d bytes of UDP stuff: src4=0x%x sport=%d data=%s\n", len, src4, sport, data);
+    for (int i = 0; i < len; ++i) data[i] = toupper(data[i]);
+    errval_t err = udp_send(udp_SHOUT_server_socket, src4, sport, data, len);
+    assert(!err_is_fail(err));
+}
+
+static void udp_SHOUT_server_subscribe(void) {
+    assert(!err_is_fail(udp_socket_open(MY_IP, 47, udp_SHOUT_server_recv, &udp_SHOUT_server_socket)));
+}
+
+///// end SHOUT server /////
 
 int main(int argc, char *argv[])
 {
@@ -127,6 +148,7 @@ int main(int argc, char *argv[])
     CHECK("in serial_init", serial_init(serial_addr, UART4_IRQ));
 
     udp_echo_server_subscribe();
+    udp_SHOUT_server_subscribe();
 
     // Hang around
     struct waitset *default_ws = get_default_waitset();
