@@ -95,7 +95,6 @@ uint64_t omap_timer_read(void)
 {
     volatile uint32_t *low = OMAP_TIMER_LOW(timer_mem);
     volatile uint32_t *high = OMAP_TIMER_HIGH(timer_mem);
-
     // algo (cortex a9 mpcore trm, page 4-9):
     // 1. read upper 32 bits
     // 2. read lower 32 bits

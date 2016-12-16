@@ -4,7 +4,7 @@
 #include <sdma/sdma_rpc.h>
 
 #define DEFAULT_BUF_SIZE 1099
-#define MAGNITUDE_ORDERS 1
+#define MAGNITUDE_ORDERS 5
 
 inline size_t pow(size_t base, size_t exp) {
     size_t res = 1;
@@ -27,7 +27,7 @@ int main(int argc, char** argv)
     debug_printf("Connected to SDMA driver\n");
 
     // I. Memcpy: 2. Allocate src frame.
-    size_t frame_size = 1024 * 10 * BASE_PAGE_SIZE;
+    size_t frame_size = 1024 * 30 * BASE_PAGE_SIZE;
     struct capref src;
     size_t retsize;
     err = frame_alloc(&src, frame_size, &retsize);
@@ -171,37 +171,77 @@ int main(int argc, char** argv)
     }
 
     // III. Rotate.
-    size_t width = 5;
-    size_t height = 3;
+    size_t width = 8;
+    size_t height = 8;
     uint32_t* src_uibuf = (uint32_t*) src_buf;
-    for (size_t i = 0; i < height; ++i) {
-        for (size_t j = 0; j < width; ++j) {
-            src_uibuf[i * width + j + src_offset] = i * width + j;
-        }
-    }
-    sys_debug_flush_cache();
-    debug_printf("@@@@ Matrix before rotation (width=%u, height=%u):\n",
-            width, height);
-    for (size_t i = 0; i < width * height; ++i) {
-        printf("%u ", src_uibuf[i + src_offset]);
-    }
-    printf("\n");
-
-    err = sdma_rpc_rotate(&rpc, dst, dst_offset, src, src_offset, width, height);
-    if (err_is_fail(err)) {
-        USER_PANIC_ERR(err, "sdma_rpc_rotate failed");
-    }
-    err = sdma_rpc_wait_for_response(&rpc);
-    if (err_is_fail(err)) {
-        USER_PANIC_ERR(err, "sdma_rpc_wait_for_response failed");
-    }
-
-    debug_printf("@@@@ Matrix after rotation (width=%u, height=%u):\n",
-            height, width);
-    
     uint32_t* dst_uibuf = (uint32_t*) dst_buf;
-    for (size_t i = 0; i < width * height; ++i) {
-        printf("%u ", dst_uibuf[i + dst_offset]);
+    for (size_t ord = 0; ord < MAGNITUDE_ORDERS; ord += 2) {
+        for (size_t op = 0; op < num_mem_ops; ++op) {
+            for (size_t i = 0; i < height; ++i) {
+                for (size_t j = 0; j < width; ++j) {
+                    src_uibuf[i * width + j + src_offset] = i * width + j;
+                }
+            }
+            sys_debug_flush_cache();
+            uint64_t timer_start = omap_timer_read();
+            err = sdma_rpc_rotate(&rpc, dst, dst_offset, src, src_offset, width,
+                    height);
+            if (err_is_fail(err)) {
+                USER_PANIC_ERR(err, "sdma_rpc_rotate failed");
+            }
+            err = sdma_rpc_wait_for_response(&rpc);
+            if (err_is_fail(err)) {
+                USER_PANIC_ERR(err, "sdma_rpc_wait_for_response failed");
+            }
+            uint64_t timer_end = omap_timer_read();
+            debug_printf("*** Time elapsed for 1 SDMA rotate of size %u x %u: %llu\n",
+                    height, width, timer_end - timer_start);
+        }
+        // a[i][j] -> a[j][height - i - 1]
+        // a[i * width + j] -> a[j * height + height - i - 1]
+
+        // Testing.
+        for (size_t i = 0; i < height; ++i) {
+            for (size_t j = 0; j < width; ++j) {
+                if (src_uibuf[i * width + j + src_offset] != dst_uibuf[j * height + height - i - 1 + dst_offset]) {
+                    USER_PANIC("SDMA ROTATE FAILED: element at (i,j)=(%u,%u) "
+                            "should be %u, but is %u\n",
+                            i, j,
+                            dst_uibuf[j * height + height - 1 + dst_offset],
+                            src_uibuf[i * width + j + src_offset]);
+                }
+            }
+        }
+
+        width *= 10;
+        height *= 10;
     }
-    printf("\n");
+
+    size_t n = 8;
+    for (size_t ord = 0; ord < MAGNITUDE_ORDERS; ord += 2) {
+        for (size_t op = 0; op < num_mem_ops; ++op) {
+            for (size_t i = 0; i < n; ++i) {
+                for (size_t j = 0; j < n; ++j) {
+                    src_uibuf[i * n + j + src_offset] = i * n + j;
+                }
+            }
+            sys_debug_flush_cache();
+
+            uint64_t timer_start = omap_timer_read();
+            size_t f = n / 2;
+            size_t c = n / 2 + (n % 2 != 0);
+            for (size_t x = 0; x < f; ++x) {
+                for (size_t y = 0; y < c; ++y) {
+                    dst_uibuf[x * n + y + dst_offset] = src_uibuf[y * n + n - x - 1 + src_offset];
+                    dst_uibuf[y * n + n - x - 1 + dst_offset] = src_uibuf[(n - x - 1) * n + n - y - 1 + src_offset];
+                    dst_uibuf[(n - x - 1) * n + n - y - 1 + dst_offset] = src_uibuf[(n - y - 1) * n + x + src_offset];
+                    dst_uibuf[(n - y - 1) * n + x + dst_offset] = src_uibuf[x * n + y + src_offset];
+                }
+            }
+            uint64_t timer_end = omap_timer_read();
+            debug_printf("*** Time elapsed for 1 standard rotate of size %u x %u: "
+                    "%llu\n", n, n, timer_end - timer_start);
+        }
+        n *= 10;
+    }
 }

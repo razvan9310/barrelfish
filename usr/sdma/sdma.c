@@ -864,6 +864,10 @@ void sdma_update_channel_status(struct sdma_driver* sd, uint8_t irq_line,
                 if (cpy_len > client->len - client->dst_offset) {
                     cpy_len = client->len - client->dst_offset;
                 }
+
+                // debug_printf("MEMSET: continuing with size %u, so far set %u\n",
+                //         cpy_len, client->dst_offset);
+
                 sd->chan_state[chan].err = sdma_start_transfer(
                         sd,
                         client,

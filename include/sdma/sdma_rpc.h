@@ -32,6 +32,8 @@ struct sdma_rpc {
 	struct waitset* ws;
 
 	bool request_pending;
+
+    // uint64_t ipc_time;
 };
 
 /**

@@ -22,7 +22,7 @@
 #include <aos/aos_rpc.h>
 #include <spawn/spawn.h>
 
-#define MAX_CLIENT_RAM 128 * 1024 * 1024
+#define MAX_CLIENT_RAM 512 * 1024 * 1024
 
 // Tracks frames for inter-core communication channel endpoints.
 struct ic_frame_node {

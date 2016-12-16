@@ -14,7 +14,7 @@
     build library {
         target = "sdma_rpc",
         cFiles = [ "sdma_rpc.c" ],
-        addLibraries = [ "time" ]
+        addLibraries = [ "omap_timer", "time" ]
      }
 ]
 

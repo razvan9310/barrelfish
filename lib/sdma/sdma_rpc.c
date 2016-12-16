@@ -14,6 +14,7 @@
 
 #include <aos/aos.h>
 #include <aos/aos_rpc.h>
+#include <omap_timer/timer.h>
 #include <sdma/sdma_rpc.h>
 
 errval_t sdma_rpc_send_and_receive(uintptr_t* args, void* send_handler,
@@ -67,6 +68,9 @@ errval_t sdma_rpc_init(struct sdma_rpc* rpc, struct waitset* ws)
 
     // By now we've successfully established the underlying LMP channel for RPC.
     rpc->request_pending = false;
+
+    omap_timer_init();
+    omap_timer_ctrl(true);
 
     return SYS_ERR_OK;
 }
@@ -137,6 +141,8 @@ errval_t sdma_rpc_memcpy(struct sdma_rpc* rpc,
     args[3] = (uintptr_t) src_offset;
     args[4] = (uintptr_t) len;
 
+    // debug_printf("MEMCPY: IPC timer reset to 0\n");
+    // rpc->ipc_time = 0;
     CHECK("sdma_rpc_memcpy: sdma_rpc_send_and_receive (src, len)",
             sdma_rpc_send_and_receive(args, sdma_rpc_memcpy_send_handler,
                     sdma_rpc_response_recv_handler));
@@ -177,6 +183,8 @@ errval_t sdma_rpc_memset(struct sdma_rpc* rpc,
     args[3] = (uintptr_t) len;
     args[4] = (uintptr_t) val;
 
+    // debug_printf("MEMSET: IPC timer reset to 0\n");
+    // rpc->ipc_time = 0;
     CHECK("sdma_rpc_memset: sdma_rpc_send_and_receive",
             sdma_rpc_send_and_receive(args, sdma_rpc_memset_send_handler,
                     sdma_rpc_response_recv_handler));
@@ -212,6 +220,8 @@ errval_t sdma_rpc_rotate(struct sdma_rpc* rpc,
     args[4] = (uintptr_t) width;
     args[5] = (uintptr_t) height;
 
+    // debug_printf("ROTATE: IPC timer reset to 0\n");
+    // rpc->ipc_time = 0;
     CHECK("sdma_rpc_rotate: sdma_rpc_send_and_receive (src, width, height)",
             sdma_rpc_send_and_receive(args, sdma_rpc_rotate_send_handler,
                     sdma_rpc_response_recv_handler));
@@ -247,10 +257,13 @@ errval_t sdma_rpc_memcpy_send_handler(void* void_args)
     
     errval_t err;
     size_t retries = 0;
+    // uint64_t timer_start = omap_timer_read();
     do {
         err = lmp_chan_send3(&rpc->lc, LMP_FLAG_SYNC, *cap, code, offset, len);
         ++retries;
     } while (err_is_fail(err) && retries < 5);
+    // uint64_t timer_end = omap_timer_read();
+    // rpc->ipc_time += timer_end - timer_start;
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "memcpy RPC send error");
     }
@@ -270,11 +283,14 @@ errval_t sdma_rpc_memset_send_handler(void* void_args)
 
     errval_t err;
     size_t retries = 0;
+    // uint64_t timer_start = omap_timer_read();
     do {
         err = lmp_chan_send4(&rpc->lc, LMP_FLAG_SYNC, *cap, SDMA_RPC_MEMSET,
                 offset, len, val);
         ++retries;
     } while (err_is_fail(err) && retries < 5);
+    // uint64_t timer_end = omap_timer_read();
+    // rpc->ipc_time += timer_end - timer_start;
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "memset RPC send error");
     }
@@ -295,11 +311,14 @@ errval_t sdma_rpc_rotate_send_handler(void* void_args)
     
     errval_t err;
     size_t retries = 0;
+    // uint64_t timer_start = omap_timer_read();
     do {
         err = lmp_chan_send4(&rpc->lc, LMP_FLAG_SYNC, *cap, code, offset, width,
                 height);
         ++retries;
     } while (err_is_fail(err) && retries < 5);
+    // uint64_t timer_end = omap_timer_read();
+    // rpc->ipc_time += timer_end - timer_start;
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "rotate RPC send error");
     }
@@ -329,6 +348,7 @@ errval_t sdma_rpc_response_recv_handler(void* void_args)
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "general-purpose response receive handler");
     }
+
     return err;
 }
 
@@ -341,11 +361,14 @@ bool sdma_rpc_check_for_response(struct sdma_rpc* rpc)
 
 errval_t sdma_rpc_wait_for_response(struct sdma_rpc* rpc)
 {
+    rpc->request_pending = false;
+
     // Block until channel is ready to receive.
     CHECK("sdma_rpc_wait_for_response: event_dispatch receive",
             event_dispatch(rpc->ws));
 
-    rpc->request_pending = false;
+    // debug_printf("Time spent on IPC: %llu\n", rpc->ipc_time);
+
 
     return SYS_ERR_OK;
 }
