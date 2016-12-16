@@ -190,15 +190,6 @@ domainid_t* rpc_process_list(size_t* len);
 /**
  * \brief Returns the DevFrame cap using given base and bytes size.
  */
-errval_t rpc_device_cap(lpaddr_t base, size_t bytes, struct capref* retcap);
-/**
- * \brief Returns the interrupt (IRQ) capability.
- */
-static inline errval_t rpc_irq_cap(struct capref* retcap)
-{
-    CHECK("rpc_irq_cap: allocating slot for retcap", slot_alloc(retcap));
-    return cap_copy(*retcap, cap_irq);
-}
 /**
  * \brief Returns the SDMA driver's endpoint capability.
  */

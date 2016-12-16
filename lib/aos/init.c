@@ -93,18 +93,6 @@ static size_t syscall_terminal_write(const char *buf, size_t len)
 //     return 0;
 // }
 
-static size_t syscall_terminal_read(char *buf, size_t len)
-{
-    len = sys_getchar(buf);
-    return len;
-}
-
-static size_t aos_terminal_read(char *buf, size_t len)
-{
-    aos_rpc_serial_getchar(get_init_rpc(), buf);
-    return len;
-}
-
 /* Set libc function pointers */
 void barrelfish_libc_glue_init(void)
 {
@@ -204,11 +192,6 @@ void default_exception_handler(enum exception_type type, int subtype,
     }
 }
 
-void terminal_read_handler(void *params);
-void terminal_read_handler(void *params)
-{
-    printf("We got an interrupt for a character\n");
-}
 /** \brief Initialise libbarrelfish.
  *
  * This runs on a thread in every domain, after the dispatcher is setup but
