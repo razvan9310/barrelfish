@@ -23,6 +23,7 @@
 #include <spawn/spawn.h>
 
 #define MAX_CLIENT_RAM 128 * 1024 * 1024
+#define LED_BIT 8
 
 // Tracks frames for inter-core communication channel endpoints.
 struct ic_frame_node {
@@ -76,6 +77,8 @@ struct system_ps {
     struct system_ps* prev;
 };
 
+void add_process_ps_list(char *name);
+
 /**
  * \brief Returns the client_state instance corresponding to the given client
  * capref.
@@ -100,18 +103,53 @@ static inline void rpc_putchar(char* c)
 {
     sys_print(c, 1);
 }
+
+static inline void rpc_light_led(uint32_t status)
+{
+    // Forge frame for the led memory segment
+    struct capref led_cap;
+    errval_t err;
+    void *ret;
+    //size_t retsize = 8; 
+    genpaddr_t start = (genpaddr_t) 0x4A310000;
+
+    // 1. Allocate some slot for led_cap
+    err = slot_alloc(&led_cap);
+    //DEBUG_ERR(err, "allocating slot for led_cap");
+
+    // 2. Forge frame from kernel
+    err = frame_forge(led_cap, start, BASE_PAGE_SIZE, 0);
+    //DEBUG_ERR(err, "forging out_enab");
+
+    struct frame_identity ret1;
+    err = frame_identify(led_cap, &ret1);
+    //DEBUG_ERR(err, "identify frame for led_cap");
+
+    //debug_printf("Slot of new cap is: %d base: %ld size: %ld\n", led_cap.slot, ret1.base, ret1.bytes);
+    // 3. Map led_cap frame to our pagetable
+    err = paging_map_frame(get_current_paging_state(), &ret, BASE_PAGE_SIZE, led_cap,
+            NULL, NULL);
+    //DEBUG_ERR(err, "ERROR in mapping page for led_cap");
+    
+    volatile int * out_enab = (int *)(ret + 0x134);
+    volatile int * dataout  = (int *)(ret + 0x13C);
+    int mask = 1 << LED_BIT;
+    *out_enab &= ~(mask);
+    if(status == 1) {
+        *dataout = mask;
+    }
+    else if(status == 2) {
+        *dataout = 0;
+    }
+}
+
 /**
  * \brief Returns a character from terminal input.
  */
 static inline char rpc_getchar(void)
 {
     char c;
-    while (true) {
-        sys_getchar(&c);
-        if (c != '\0') {
-            break;
-        }
-    }
+    sys_getchar(&c);
     return c;
 }
 /**
@@ -121,18 +159,6 @@ static inline void rpc_string(char* string, size_t len)
 {
     sys_print(string, len);
 }
-/**
- * \brief Spawns a new process, returning its PID.
- */
-errval_t rpc_spawn(char* name, domainid_t* pid);
-/**
- * \brief Returns the name of the process with the given PID.
- */
-char* rpc_process_name(domainid_t pid, size_t* len);
-/**
- * \brief Returns the list of active processes on the current core.
- */
-domainid_t* rpc_process_list(size_t* len);
 /**
  * \brief Returns the DevFrame cap using given base and bytes size.
  */
@@ -145,6 +171,25 @@ static inline errval_t rpc_irq_cap(struct capref* retcap)
     CHECK("rpc_irq_cap: allocating slot for retcap", slot_alloc(retcap));
     return cap_copy(*retcap, cap_irq);
 }
+/**
+ * \brief Spawns a new process, returning its PID.
+ */
+errval_t rpc_spawn(char* name, domainid_t* pid);
+/**
+ * \brief Spawns a new process, returning its PID.
+ */
+errval_t rpc_spawn_args(char* name , domainid_t* pid);
+/**
+ * \brief Returns the name of the process with the given PID.
+ */
+char* rpc_process_name(domainid_t pid, size_t* len);
+/**
+ * \brief Returns the list of active processes on the current core.
+ */
+domainid_t* rpc_process_list(size_t* len);
+/**
+ * \brief Returns the DevFrame cap using given base and bytes size.
+ */
 /**
  * \brief Returns the SDMA driver's endpoint capability.
  */
@@ -186,6 +231,11 @@ void* process_local_putchar_request(struct lmp_recv_msg* msg,
 void* process_local_getchar_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients);
 /**
+ * \brief Processes a terminal driver getchar request.
+ */
+void* process_local_light_led_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients);
+/**
  * \brief Processes a send string request.
  */
 void* process_local_string_request(struct lmp_recv_msg* msg,
@@ -194,6 +244,11 @@ void* process_local_string_request(struct lmp_recv_msg* msg,
  * \brief Processes a same-core spawn new process request.
  */
 void* process_local_spawn_request(struct lmp_recv_msg* msg,
+        struct capref* request_cap, struct client_state* clients);
+/**
+ * \brief Processes a same-core spawn new process request.
+ */
+void* process_local_spawn_args_request(struct lmp_recv_msg* msg,
         struct capref* request_cap, struct client_state* clients);
 /**
  * \brief Processes a same-core get process name for PID request.

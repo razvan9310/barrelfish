@@ -649,6 +649,90 @@ errval_t setup_args(struct spawninfo* si, struct mem_region* mr)
     return SYS_ERR_OK;
 }
 
+errval_t setup_args_extra(struct spawninfo* si, struct mem_region* mr, char* extra)
+{
+    // 1. Get args (as string).
+    const char* args = multiboot_module_opts(mr);
+    size_t args_length = strlen(args);
+    size_t frame_size = ROUND_UP(
+            sizeof(struct spawn_domain_params) + args_length + 1,
+            BASE_PAGE_SIZE);
+
+    // 2. Allocate frame for args.
+    void* args_vaddr;
+    struct capref frame;
+    size_t retsize;
+    CHECK("args frame_alloc", frame_alloc(&frame, frame_size, &retsize));
+
+    // 3. Map args into my vspace.
+    CHECK("args to my vspace",
+            paging_map_frame(get_current_paging_state(),
+                    &args_vaddr,
+                    retsize,
+                    frame,
+                    NULL, NULL));
+
+    // 4. Args into child's cspace.
+    struct capref frame_child = {
+        .cnode = si->l2_cnodes[ROOTCN_SLOT_TASKCN],
+        .slot = TASKCN_SLOT_ARGSPAGE
+    };
+    CHECK("copy args to child cspace", cap_copy(frame_child, frame));
+
+    // 5. Args into child's vspace.
+    void* args_vaddr_child;
+    CHECK("args to child's vspace",
+            paging_map_frame(&si->pg_state,
+                    &args_vaddr_child,
+                    retsize,
+                    frame,
+                    NULL, NULL));
+
+    // 6. Fill in spawn_domain_params.
+    struct spawn_domain_params* params =
+            (struct spawn_domain_params*) args_vaddr;
+    memset(&params->argv[0], 0, sizeof(params->argv));
+    memset(&params->envp[0], 0, sizeof(params->envp));
+
+    // 7. Add argv to child's vspace.
+    // map_argument(args, params, (lvaddr_t) args_vaddr_child)
+    char* last = (char*) params + sizeof(struct spawn_domain_params);
+    char* base = last;
+    lvaddr_t base_addr_child = (lvaddr_t) args_vaddr_child
+            + sizeof(struct spawn_domain_params);
+    strcpy(base, args);
+
+    size_t argc = 0;
+    char* it = base;
+    if(extra)
+        strcat(it, extra);
+
+    while (*it) {
+        if (*it == ' ') {
+            *it = 0;
+            params->argv[argc++] = (void*) base_addr_child + (last - base);
+            ++it;
+            last = it;
+        }
+        ++it;
+    }
+    params->argv[argc++] = (void*) base_addr_child + (last - base);
+    params->argc = argc;
+    
+    // 8. Everything else defaults to 0.
+    params->vspace_buf = NULL;
+    params->vspace_buf_len = 0;
+    params->tls_init_base = NULL;
+    params->tls_init_len = 0;
+    params->tls_total_len = 0;
+    params->pagesize = 0;
+
+    // 9. Complete the address of child's dispatcher.
+    si->enabled_area->named.r0 = (uint32_t) args_vaddr_child;
+
+    return SYS_ERR_OK;
+}
+
 // TODO(M2): Implement this function such that it starts a new process
 // TODO(M4): Build and pass a messaging channel to your child process
 errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si,
@@ -707,6 +791,76 @@ errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si,
     // - Setup environment
     // get arguments from menu.lst
     CHECK("setup_args", setup_args(si, module));
+
+    // - Make dispatcher runnable
+    struct capref dispatcher_frame_child = {
+        .cnode = si->l2_cnodes[ROOTCN_SLOT_TASKCN],
+        .slot = TASKCN_SLOT_DISPFRAME
+    };
+    CHECK("invoking dispatcher",
+          invoke_dispatcher(si->dispatcher, cap_dispatcher,
+          si->l1_cnode_cap, si->l1_pagetable_child,
+          dispatcher_frame_child, true));
+
+    return SYS_ERR_OK;
+}
+
+errval_t spawn_load_by_name_args(void * binary_name, struct spawninfo * si,
+        coreid_t core_id, char* extra_args)
+{
+
+    DPRINT("loading and starting: %s", binary_name);
+
+    // Init spawninfo
+    memset(si, 0, sizeof(*si));
+    si->binary_name = binary_name;
+
+    // - Get the binary from multiboot image
+
+    struct mem_region *module = multiboot_find_module(bi, binary_name);
+    if (!module) {
+        DPRINT("Module %s not found", binary_name);
+        return SPAWN_ERR_FIND_MODULE;
+    }
+
+    struct capref child_frame = {
+        .cnode = cnode_module,
+        .slot = module->mrmod_slot,
+    };
+
+    // - Map multiboot module in your address space
+    struct frame_identity child_frame_id;
+    CHECK("identifying frame",
+          frame_identify(child_frame, &child_frame_id));
+
+    lvaddr_t mapped_elf;
+    CHECK("mapping frame",
+          paging_map_frame(get_current_paging_state(), (void**)&mapped_elf,
+                           child_frame_id.bytes, child_frame, NULL, NULL));
+    DPRINT("ELF header: %0x %c %c %c", ((char*)mapped_elf)[0], ((char*)mapped_elf)[1], ((char*)mapped_elf)[2], ((char*)mapped_elf)[3]);
+
+    // this gets checked twice (second time in elf_load)... so what :D
+    struct Elf32_Ehdr *elf_header = (void*)mapped_elf;
+    if (!IS_ELF(*elf_header)) {
+        DPRINT("Module %s is not an ELF executable", binary_name);
+        return ELF_ERR_HEADER;
+    }
+
+    // - Setup child's cspace.
+    CHECK("setup_cspace", setup_cspace(si));
+
+    // - Setup child's vspace.
+    CHECK("setup_vspace", setup_vspace(si));
+
+    // - Load the ELF binary.
+    CHECK("setup_elf", setup_elf(si, mapped_elf, child_frame_id.bytes));
+
+    // - Setup dispatcher.
+    CHECK("setup_dispatcher", setup_dispatcher(si, core_id));
+
+    // - Setup environment
+    // get arguments from menu.lst
+    CHECK("setup_args", setup_args_extra(si, module, extra_args));
 
     // - Make dispatcher runnable
     struct capref dispatcher_frame_child = {

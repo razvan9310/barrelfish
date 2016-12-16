@@ -185,9 +185,8 @@ errval_t stat(const char *path, struct fs_fileinfo *buf)
     if (f == NULL) {
         return FS_ERR_NOTFOUND;
     }
-
+    debug_printf("Not here\n");
     errval_t err = fstat(f, buf);
-
     fclose(f);
 
     return err;
