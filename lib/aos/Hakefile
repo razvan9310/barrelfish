@@ -19,6 +19,7 @@
                              "arch/arm/dispatch.c",
                              "arch/arm/sys_debug.c",
                              "arch/arm/syscalls.c",
+                             "nameserver/nameserver_rpc.c",
                              "slot_alloc/single_slot_alloc.c",
                              "slot_alloc/slot_alloc.c",
                              "slot_alloc/range_slot_alloc.c",

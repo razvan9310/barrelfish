@@ -25,7 +25,8 @@
 #define TASKCN_SLOT_INITEP      (TASKCN_SLOTS_USER+1)   ///< End Point to init (for monitor and memserv)
 #define TASKCN_SLOT_MONITOREP   (TASKCN_SLOTS_USER+1)   ///< lrpc endpoint to monitor (for all other domains)
 #define TASKCN_SLOT_SDMAEP      (TASKCN_SLOTS_USER+2)   ///< Endpoint cap to the SDMA driver.
-#define TASKCN_SLOTS_FREE       (TASKCN_SLOTS_USER+3)   ///< first free slot in taskcn
+#define TASKCN_SLOT_NSEP        (TASKCN_SLOTS_USER+3)   ///< lrpc endpoint to monitor (for all other domains)
+#define TASKCN_SLOTS_FREE       (TASKCN_SLOTS_USER+4)   ///< first free slot in taskcn
 
 // taskcn appears at the beginning of cspace, so the cptrs match the slot numbers
 #define CPTR_ROOTCN     TASKCN_SLOT_ROOTCN      ///< Cptr to init's root CNode

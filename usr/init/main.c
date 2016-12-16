@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
             my_core_id);
     CHECK("forging RAM cap & retrieving bi from URPC frame",
             read_from_urpc(urpc_buf, &bi, my_core_id));
-    CHECK("start core 1", start_core(1, my_core_id, bi));
+    // CHECK("start core 1", start_core(1, my_core_id, bi));
 
     if (my_core_id == 1) {
         err = initialize_ram_alloc(&remaining_mem_base, &remaining_mem_size);
@@ -121,12 +121,19 @@ int main(int argc, char *argv[])
     CHECK("Copy to initep", cap_copy(cap_initep, lc->local_cap));
 
     if (my_core_id == 0) {
+        CHECK("spawning nameserver",
+                spawn_load_by_name("nameserver",
+                        (struct spawninfo*) malloc(sizeof(struct spawninfo)),
+                        my_core_id));
+        uint32_t i = 0;
+        while (i < 1000000) {
+            ++i;
+        }
         CHECK("spawning sdma",
                 spawn_load_by_name(
                         "sdma",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)),
                         my_core_id));
-        uint32_t i = 0;
         while(i<1000000) {
             i++;
         }
@@ -134,6 +141,7 @@ int main(int argc, char *argv[])
                 spawn_load_by_name("bash",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
         add_process_ps_list("init");
+        add_process_ps_list("nameserver");
         add_process_ps_list("sdma");
         add_process_ps_list("bash");
     } else {

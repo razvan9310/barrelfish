@@ -18,6 +18,8 @@
 
 #include <sys/cdefs.h>
 #include <aos/threads.h>
+// #include <nameserver_rpc.h>
+
 
 __BEGIN_DECLS
 
@@ -36,6 +38,8 @@ domainid_t disp_get_domain_id(void);
 coreid_t disp_handle_get_core_id(dispatcher_handle_t handle);
 void set_init_rpc(struct aos_rpc *initrpc);
 struct aos_rpc *get_init_rpc(void);
+// void set_ns_rpc(struct aos_ns_rpc *nsrpc);
+// struct aos_ns_rpc *get_ns_rpc(void);
 struct morecore_state *get_morecore_state(void);
 struct paging_state *get_current_paging_state(void);
 void set_current_paging_state(struct paging_state *st);

@@ -90,7 +90,7 @@ const char *multiboot_module_name(struct mem_region *region)
 
 struct mem_region *multiboot_find_module(struct bootinfo *bi, const char *name)
 {
-    printf("address of bootinfo: %p\n", bi);
+    // printf("address of bootinfo: %p\n", bi);
     for(size_t i = 0; i < bi->regions_length; i++) {
         struct mem_region *region = &bi->regions[i];
         assert(region != NULL);
