@@ -84,11 +84,11 @@ errval_t pass_ip_to_link(struct ip_packet *packet) {
 
 /**
  * Called by the serial driver whenever input is available.
- * Does not need to be reentrant in the current implementation.
+ * Fast and minimal, as this an interrupt handler and we don't want to lose interrupts.
+ * Note: Someone somewhere needs to call slip_decode!!!
  */
 void serial_input(uint8_t *buf, size_t len) {
     circ_buf_write(&in_buf, buf, len);
-    slip_decode(&in_buf, &pass_link_to_ip);
 }
 
 ///// echo server /////
@@ -153,6 +153,7 @@ int main(int argc, char *argv[])
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
+        slip_decode(&in_buf, &pass_link_to_ip); // just making sure to call this once in a while... :D
         err = event_dispatch(default_ws);
         if (err_is_fail(err)) {
             DEBUG_ERR(err, "in event_dispatch");
