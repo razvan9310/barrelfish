@@ -673,6 +673,12 @@ errors libelf ELF_ERR_ {
     failure NOT_PAGE_ALIGNED    "Unaligned load address specified in ELF header",
 };
 
+// errors from Bash library
+errors libelf BASH_ERR_ {
+    failure SYNTAX              "Invalid syntax",
+    failure FILE_NOT_FOUND      "Invalid file name",
+};
+
 // errors from memory management library
 errors libmm MM_ERR_ {
     failure FIND_NODE           "Failure in find_node()",
@@ -714,6 +720,8 @@ errors libsdma SDMA_ERR_ {
     failure NO_AVAIL_CHANNEL    "No channel available",
     failure REQUEST_IN_PROGRESS "An SDMA request is already in progress",
     failure MEMCPY              "Bad memcpy request",
+    failure MEMSET              "Bad memset request",
+    failure ROTATE              "Bad rotate request",
 };
 
 // errors in init

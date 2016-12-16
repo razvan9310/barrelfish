@@ -35,7 +35,7 @@ extern morecore_free_func_t sys_morecore_free;
 
 // dummy mini heap (16M)
 
-#define HEAP_SIZE (1<<24)
+#define HEAP_SIZE (1<<26)
 
 static char mymem[HEAP_SIZE] = { 0 };
 static char *endp = mymem + HEAP_SIZE;

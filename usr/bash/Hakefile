@@ -6,14 +6,14 @@
 -- If you do not find this file, copies can be found by writing to:
 -- ETH Zurich D-INFK, Universitaetstr 6, CH-8092 Zurich. Attn: Systems Group.
 --
--- Hakefile for /usr/sdma_test
+-- Hakefile for /usr/init
 --
 --------------------------------------------------------------------------
 
-[ build application { target = "sdma_test",
-  		              cFiles = [ "main.c" ],
+[ build application { target = "bash",
+  		              cFiles = [ "bash.c" ],
+  		              addLibraries = [ "fs" ],
                       addLinkFlags = [ "-e _start"],
-                      addLibraries = [ "omap_timer", "sdma_rpc" ],
                       architectures = allArchitectures
                     }
 ]

@@ -20,6 +20,7 @@
 #include <aos/dispatch.h>
 #include <aos/curdispatcher_arch.h>
 #include <aos/dispatcher_arch.h>
+#include <aos/inthandler.h>
 #include <barrelfish_kpi/dispatcher_shared.h>
 #include <aos/morecore.h>
 #include <aos/paging.h>
@@ -84,20 +85,13 @@ static size_t syscall_terminal_write(const char *buf, size_t len)
     return 0;
 }
 
-static size_t aos_terminal_write(const char* buf, size_t len)
-{
-    if (len > 0) {
-        debug_printf("init.c: calling aos_rpc_send_string\n");
-        return aos_rpc_send_string(get_init_rpc(), buf, 0);
-    }
-    return 0;
-}
-
-static size_t dummy_terminal_read(char *buf, size_t len)
-{
-    debug_printf("terminal read NYI! returning %d characters read\n", len);
-    return len;
-}
+// static size_t aos_terminal_write(const char* buf, size_t len)
+// {
+//     if (len > 0) {
+//         return aos_rpc_send_string(get_init_rpc(), buf, 0);
+//     }
+//     return 0;
+// }
 
 /* Set libc function pointers */
 void barrelfish_libc_glue_init(void)
@@ -105,8 +99,7 @@ void barrelfish_libc_glue_init(void)
     // XXX: FIXME: Check whether we can use the proper kernel serial, and
     // what we need for that
     // TODO: change these to use the user-space serial driver if possible
-    _libc_terminal_read_func = dummy_terminal_read;
-    _libc_terminal_write_func = init_domain ? syscall_terminal_write : aos_terminal_write;
+    _libc_terminal_write_func = syscall_terminal_write;
     _libc_exit_func = libc_exit;
     _libc_assert_func = libc_assert;
     /* morecore func is setup by morecore_init() */
@@ -165,7 +158,7 @@ static void handle_pagefault(int subtype,
 
     struct capref frame;
     size_t retsize;
-    err = frame_alloc(&frame, BASE_PAGE_SIZE, &retsize);
+    err = frame_alloc(&frame, 4 * BASE_PAGE_SIZE, &retsize);
     if (err_is_fail(err)) {
         debug_printf("Pagefault handler erred during frame_alloc: %s\n",
                 err_getstring(err));
@@ -257,6 +250,9 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
 
     // init domains only get partial init
     if (init_domain) {
+        CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, 
+                cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
+        
         return SYS_ERR_OK;
     }
 
@@ -266,7 +262,6 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // Set domain init rpc.
     set_init_rpc(&rpc);
     debug_printf("init.c: successfully setup connection with init\n");
-
     // right now we don't have the nameservice & don't need the terminal
     // and domain spanning, so we return here
     return SYS_ERR_OK;

@@ -15,6 +15,7 @@ module /armv7/sbin/init
 module /armv7/sbin/hello
 module /armv7/sbin/byebye
 module /armv7/sbin/net
+module /armv7/sbin/bash
 
 # milestone 3
 module /armv7/sbin/memeater

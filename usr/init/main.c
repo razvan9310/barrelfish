@@ -21,15 +21,34 @@
 #include <aos/morecore.h>
 #include <aos/paging.h>
 #include <mm/mm.h>
+#include <aos/inthandler.h>
 #include <spawn/spawn.h>
 #include <urpc/urpc.h>
 
 #include "coreboot.h"
 #include "mem_alloc.h"
 #include "scheduler.h"
+#include "rpc_server.h"
 
 coreid_t my_core_id;
 struct bootinfo *bi;
+
+static char c;
+void terminal_read_handler(void *params);
+void terminal_read_handler(void *params)
+{
+    debug_printf("I am in terminal_read_handler!!");
+    sys_getchar(&c);
+
+    debug_printf("%c\n", c);
+    debug_printf("We got an interrupt for a character\n");
+}
+
+
+// static void pesudo_task(void)
+// {
+//     debug_printf("Hello World\n");
+// }
 
 int main(int argc, char *argv[])
 {
@@ -92,32 +111,33 @@ int main(int argc, char *argv[])
         CHECK("reading modules from URPC",
                 read_modules(urpc_buf, bi, my_core_id));
     }
-
     // Initialize URPC for subsequent inter-core communication attempts.
     urpc_init(urpc_buf, my_core_id);
-
-    CHECK("Retype selfep from dispatcher", cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPoint, 0, 1));
 
     struct lmp_chan* lc = (struct lmp_chan*) malloc(sizeof(struct lmp_chan));
     CHECK("Create channel for parent", lmp_chan_accept(lc, DEFAULT_LMP_BUF_WORDS, NULL_CAP));
 
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
-    CHECK("COpy to initep", cap_copy(cap_initep, lc->local_cap));
+    CHECK("Copy to initep", cap_copy(cap_initep, lc->local_cap));
 
     if (my_core_id == 0) {
-        // Spawn "SDMA" on core 0.
         CHECK("spawning sdma",
                 spawn_load_by_name(
                         "sdma",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)),
                         my_core_id));
+        uint32_t i = 0;
+        while(i<1000000) {
+            i++;
+        }
+        CHECK("spawning bash",
+                spawn_load_by_name("bash",
+                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+        add_process_ps_list("init");
+        add_process_ps_list("sdma");
+        add_process_ps_list("bash");
     } else {
-        // Spawn "Byebye" on core 1.
-        // CHECK("spawning byebye",
-        //         spawn_load_by_name(
-        //                 "byebye",
-        //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)),
-        //                 my_core_id));
+        add_process_ps_list("init");
     }
 
     if (my_core_id == 1) { // let's give something to do to core 1 too :D

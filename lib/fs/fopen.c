@@ -109,6 +109,9 @@ static int fs_libc_open(char *path, int flags)
         }
 
         err = ramfs_create(mount, path, &vh);
+        if(err_is_fail(err) && err == FS_ERR_EXISTS) {
+            err = ramfs_open(mount, path, &vh);
+        }
     } else {
         // Regular open()
         err = ramfs_open(mount, path, &vh);

@@ -44,6 +44,7 @@ struct interrupt_handler_state {
 
 static void generic_interrupt_handler(void *arg)
 {
+    //printf("I am in generic_interrupt_handler!\n");
     struct interrupt_handler_state *state = arg;
     errval_t err;
 
@@ -110,7 +111,6 @@ errval_t inthandler_setup_arm(interrupt_handler_fn handler, void *handler_arg,
         free(state);
         return err_push(err, LIB_ERR_ENDPOINT_CREATE);
     }
-
     // allocate a local interrupt vector for this endpoint
     err = arm_allocirq(epcap, irq);
     if (err_is_fail(err)) {
@@ -129,7 +129,7 @@ errval_t inthandler_setup_arm(interrupt_handler_fn handler, void *handler_arg,
         free(state);
         return err_push(err, LIB_ERR_LMP_ENDPOINT_REGISTER);
     }
-
+    debug_printf("Succefully set interrupt handler for read operation");
     return SYS_ERR_OK;
 }
 

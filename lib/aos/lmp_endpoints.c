@@ -307,7 +307,6 @@ errval_t lmp_endpoint_register(struct lmp_endpoint *ep, struct waitset *ws,
     }
 
     disp_enable(handle);
-
     return err;
 }
 

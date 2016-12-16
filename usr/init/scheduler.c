@@ -243,6 +243,43 @@ errval_t process_rpc_task(struct scheduler* sc, struct rpc_task* task)
                     return SYS_ERR_OK;
                 }
                 break;
+            case AOS_RPC_SPAWN_ARGS:
+                remaining = task->msg.words[2];
+                if (task->client->spawn_buf == NULL) {
+                    task->client->spawn_buf = (char*) malloc(
+                            remaining * sizeof(char));
+                    task->client->spawn_buf_idx = 0;
+                }
+
+                stop = remaining < 24 ? remaining : 24;
+                for (size_t i = 0; i < stop; ++i) {
+                    uint32_t word = task->msg.words[3 + i / 4];
+                    task->client->spawn_buf[task->client->spawn_buf_idx++] =
+                            (char) (word >> (8 * (i % 4)));
+                }
+
+                remaining -= stop;
+                if (remaining == 0) {
+                    // Write to c-frame and reset.
+                    err = cross_core_rpc_write_request(
+                            task->client->client_frame->addr,
+                            AOS_RPC_SPAWN_ARGS, task->client->spawn_buf_idx,
+                            task->client->spawn_buf);
+                    task->client->spawn_buf_idx = 0;
+                    free(task->client->spawn_buf);
+                    task->client->spawn_buf = NULL;
+                } else {
+                    // Send ok to client, will keep receiving the rest of the
+                    // string.
+                    CHECK("register send back to local client, for spawn proc",
+                            lmp_chan_register_send(&task->client->lc,
+                                    get_default_waitset(),
+                                    MKCLOSURE((void*) send_simple_ok,
+                                            (void*) &task->client->lc)));
+
+                    return SYS_ERR_OK;
+                }
+                break;
             case AOS_RPC_GET_PNAME:
                 err = cross_core_rpc_write_request(
                         task->client->client_frame->addr,
@@ -653,6 +690,13 @@ errval_t process_rpc_request(struct scheduler* sc, uint32_t code,
             *((errval_t*) *resp) = err;
             *((domainid_t*) (*resp + sizeof(errval_t))) = pid;
             break;
+        case AOS_RPC_SPAWN_ARGS:
+            err = rpc_spawn_args((char*) req, &pid);
+            *resp_len = sizeof(errval_t) + sizeof(domainid_t);
+            *resp = malloc(*resp_len);
+            *((errval_t*) *resp) = err;
+            *((domainid_t*) (*resp + sizeof(errval_t))) = pid;
+            break;
         case AOS_RPC_GET_PNAME:
             *resp = rpc_process_name(*((domainid_t*) req), resp_len);
             break;
@@ -734,6 +778,26 @@ errval_t process_rpc_response(struct scheduler* sc, uint32_t code,
             *local_response_fn = (void*) send_serial_getchar;
             break;
         case AOS_RPC_SPAWN:
+            args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
+                    + ROUND_UP(sizeof(errval_t), 4)
+                    + ROUND_UP(sizeof(domainid_t), 4);
+            *local_response = malloc(args_size);
+            aux = *local_response;
+
+            // 1. Channel to send down.
+            *((struct lmp_chan*) aux) = client->lc;
+
+            // 2. Error code returned by spawn.
+            aux = (void*) ROUND_UP((uintptr_t) aux + sizeof(struct lmp_chan), 4);
+            *((errval_t*) aux) = *((errval_t*) resp);
+
+            // 3. PID of the newly spawned process.
+            aux = (void*) ROUND_UP((uintptr_t) aux + sizeof(errval_t), 4);
+            *((domainid_t*) aux) = *((domainid_t*) (resp + sizeof(errval_t)));
+
+            *local_response_fn = (void*) send_pid;
+            break;
+        case AOS_RPC_SPAWN_ARGS:
             args_size = ROUND_UP(sizeof(struct lmp_chan), 4)
                     + ROUND_UP(sizeof(errval_t), 4)
                     + ROUND_UP(sizeof(domainid_t), 4);

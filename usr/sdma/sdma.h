@@ -22,9 +22,11 @@
 #include <sdma/sdma_rpc.h>
 
 #define SDMA_IRQ_ENABLE_ALL 4294967295u
-
 #define SDMA_IRQ_LINE_0 (32 + 12)
 #define SDMA_CHANNELS   32
+#define SDMA_REGISTER_CLEAN -1
+
+#define SDMA_MEMSET_SIZE (4 * 1024)
 
 #define CAP_MASK_SRC   1
 #define CAP_MASK_DST   2
@@ -32,16 +34,29 @@
 
 typedef size_t chanid_t;
 
+enum OpType {
+    OpType_Memcpy,
+    OpType_Memset,
+    OpType_Rotate
+};
+
 struct client_state {
     struct lmp_chan lc;  		// LMP channel.
     struct EndPoint remote_ep;  // Used to identify clients for handshake.
     
-    struct capref src;
+    struct frame_identity src_id;
     size_t src_offset;
-    struct capref dst;
+    struct frame_identity dst_id;
     size_t dst_offset;
     uint8_t have_caps;
     size_t len;
+
+    // For rotate ops only:
+    size_t width;
+    size_t height;
+
+    enum OpType op_type;  // Memcpy, memset.
+    bool acked;
 
     // Doubly-linked list.
     struct client_state* next;
@@ -49,15 +64,16 @@ struct client_state {
 };
 
 struct channel_state {
-	bool transfer_in_progress;  // Whether there's a transfer currently in
-								// progress over this channel.
-	lpaddr_t src_addr;		    // Source address for transfer, if applicable.
-	lpaddr_t dst_addr;			// Destination address for transfer, if appl.
-	size_t size;                // Transfer size, if applicable.
+	bool transfer_in_progress;   // Whether there's a transfer currently in
+								 // progress over this channel.
+	lpaddr_t src_addr;		     // Source address for transfer, if applicable.
+	lpaddr_t dst_addr;			 // Destination address for transfer, if appl.
 
-	struct lmp_chan out_lc;     // Channel to ping when transfer is complete. 
+    struct client_state* client; // Client to ack to when transfer is complete.
 
-	errval_t err;               // Error from last transfer attempt.
+    // bool transfer_fits_in_blocks;  // Whether the transfer size is 
+
+	errval_t err;                // Error from last transfer attempt.
 };
 
 struct sdma_driver {
@@ -70,6 +86,11 @@ struct sdma_driver {
 
 	// Channel state, 32 channels.
 	struct channel_state chan_state[SDMA_CHANNELS];
+
+    // Use to simulate memset via memcpy -- will use this as source frame.
+    struct capref memset_frame;
+    struct frame_identity memset_frame_id;
+    uint8_t* memset_buf;
 
 	// RPC clients.
 	struct client_state* clients;
@@ -135,6 +156,16 @@ void* sdma_process_handshake(struct sdma_driver* sd, struct capref* cap);
  */
 void* sdma_process_memcpy(struct sdma_driver* sd, struct client_state* client,
         struct lmp_recv_msg* msg, struct capref* cap);
+/**
+ * \brief Processes an SDMA memset request.
+ */
+void* sdma_process_memset(struct sdma_driver* sd, struct client_state* client,
+        struct lmp_recv_msg* msg, struct capref* cap);
+/**
+ * \brief Processes an SDMA rotate request.
+ */
+void* sdma_process_rotate(struct sdma_driver* sd, struct client_state* client,
+        struct lmp_recv_msg* msg, struct capref* cap);
 
 /**
  * \brief SDMA RPC handshake send handler.
@@ -161,7 +192,19 @@ static inline bool sdma_valid_channel(chanid_t chan)
 /**
  * \brief Starts an SDMA job identified by the given (dst, src, len) tuple.
  */
-errval_t sdma_start_transfer(struct sdma_driver* sd, struct lmp_chan lc,
-        size_t src_addr, size_t dst_addr, size_t len);
+errval_t sdma_start_transfer(struct sdma_driver* sd,
+        struct client_state* client,
+        size_t src_addr,
+        size_t dst_addr,
+        size_t len);
+/**
+ * \brief Starts an SDMA 2D-array rotate job.
+ */
+errval_t sdma_start_rotate(struct sdma_driver* sd,
+        struct client_state* client,
+        size_t src_addr,
+        size_t dst_addr,
+        size_t width,
+        size_t height);
 
 #endif /* _INIT_SDMA_H_ */
