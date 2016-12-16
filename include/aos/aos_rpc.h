@@ -17,20 +17,22 @@
 
 #include <aos/aos.h>
 
-#define AOS_RPC_OK         0        // General-purpose OK message.
-#define AOS_RPC_FAILED     1        // RPC failure.
-#define AOS_RPC_HANDSHAKE  1 << 2   // Message passed at handshake time.
-#define AOS_RPC_MEMORY     1 << 3   // ID for memory requests.
-#define AOS_RPC_NUMBER     1 << 5   // ID for send number requests.
-#define AOS_RPC_PUTCHAR    1 << 7   // ID for putchar requests.
-#define AOS_RPC_STRING     1 << 11  // ID for send string requests.
-#define AOS_RPC_SPAWN      1 << 13  // ID for process spawn requests.
-#define AOS_RPC_GET_PNAME  1 << 15  // ID for get process name requests.
-#define AOS_RPC_GET_PLIST  1 << 19  // ID for get process name requests.
-#define AOS_RPC_GETCHAR    1 << 21  // ID for getchar requests.
+#define AOS_RPC_OK         0       // General-purpose OK message.
+#define AOS_RPC_FAILED     1       // RPC failure.
+#define AOS_RPC_HANDSHAKE  1 << 2  // Message passed at handshake time.
+#define AOS_RPC_MEMORY     1 << 3  // ID for memory requests.
+#define AOS_RPC_NUMBER     1 << 5  // ID for send number requests.
+#define AOS_RPC_PUTCHAR    1 << 7  // ID for putchar requests.
+#define AOS_RPC_STRING     1 << 11 // ID for send string requests.
+#define AOS_RPC_SPAWN      1 << 13 // ID for process spawn requests.
+#define AOS_RPC_GET_PNAME  1 << 15 // ID for get process name requests.
+#define AOS_RPC_GET_PLIST  1 << 19 // ID for get process name requests.
+#define AOS_RPC_GETCHAR    1 << 21 // ID for getchar requests.
 #define AOS_RPC_DEVICE     1 << 23  // ID for get device cap requests.
 #define AOS_RPC_IRQ        1 << 27  // ID for get IRQ cap requests.
 #define AOS_RPC_SDMA_EP    1 << 29  // ID for get SDMA endpoint requests.
+#define AOS_RPC_LIGHT_LED  1 << 4  // ID for light_led requests.
+#define AOS_RPC_SPAWN_ARGS 1 << 8  // ID for memtest requests.
 
 struct aos_rpc {
     struct lmp_chan lc;
@@ -53,12 +55,16 @@ errval_t aos_rpc_ram_send_handler(void* void_args);
 errval_t aos_rpc_ram_recv_handler(void* void_args);
 errval_t aos_rpc_process_spawn_send_handler(void* void_args);
 errval_t aos_rpc_process_spawn_recv_handler(void* void_args);
+errval_t aos_rpc_process_spawn_args_send_handler(void* void_args);
+errval_t aos_rpc_process_spawn_args_recv_handler(void* void_args);
 errval_t aos_rpc_process_get_name_send_handler(void* void_args);
 errval_t aos_rpc_process_get_name_recv_handler(void* void_args);
 errval_t aos_rpc_process_get_process_list_send_handler(void* void_args);
 errval_t aos_rpc_process_get_process_list_recv_handler(void* void_args);
 errval_t aos_rpc_serial_getchar_send_handler(void* void_args);
 errval_t aos_rpc_serial_getchar_recv_handler(void* void_args);
+errval_t aos_rpc_light_led_send_handler(void* void_args);
+errval_t aos_rpc_light_led_recv_handler(void* void_args);
 errval_t aos_rpc_device_cap_send_handler(void* void_args);
 errval_t aos_rpc_device_cap_recv_handler(void* void_args);
 errval_t aos_rpc_irq_send_handler(void* void_args);
@@ -86,6 +92,11 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *chan, size_t bytes,
         struct capref *retcap, size_t *ret_bytes);
 
 /**
+ * \brief turn on/offf led on pandaboard
+ */
+errval_t aos_rpc_light_led(struct aos_rpc *chan, uintptr_t status, coreid_t core);
+
+/**
  * \brief get one character from the serial port
  */
 errval_t aos_rpc_serial_getchar(struct aos_rpc *chan, char *retc);
@@ -103,6 +114,17 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *chan, char c);
  */
 errval_t aos_rpc_process_spawn(struct aos_rpc *chan, char *name,
         coreid_t core, domainid_t *newpid);
+
+/**
+ * \brief Request process manager to start a new process with arguments
+ * \arg name the name of the process that needs to be spawned (without a
+ *           path prefix)
+ * \arg argc count of the arguments
+ * \arg argv array storing the values of arguments
+ * \arg newpid the process id of the newly spawned process
+ */
+errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, char *name, 
+                                    coreid_t core, domainid_t *newpid);
 
 /**
  * \brief Get name of process with id pid.
@@ -139,6 +161,7 @@ errval_t aos_rpc_send_and_receive(uintptr_t* args, void* send_handler,
  */
 errval_t aos_rpc_get_device_cap(struct aos_rpc *rpc, lpaddr_t paddr, size_t bytes,
                                 struct capref *frame);
+
 /**
  * \brief Gets an interrupt (IRQ) capability.
  */
