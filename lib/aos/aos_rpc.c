@@ -218,9 +218,8 @@ errval_t aos_rpc_ram_send_handler(void* void_args)
                     AOS_RPC_MEMORY, *req_bytes);
         ++retries;
     } while (err_is_fail(err) && retries < 5);
-    if (retries == 5) {
-        return err;
-    }
+    
+    return err;
 }
 
 /**
@@ -1156,15 +1155,6 @@ errval_t aos_rpc_handshake_recv_handler(void* void_args)
     assert(msg.buf.msglen == 1);
     assert(msg.words[0] == AOS_RPC_OK);
 
-<<<<<<< HEAD
-=======
-    // N. get new cycle counter value, show result
-    uint32_t cycle_counter_end = perf_measurement_get_counter();
-    if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        // debug_printf(" *** performance measurement: aos_rpc_handshake_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
-    }
-
->>>>>>> b1e62fce307f32f0fdad10f3b2820cddf2d39f59
     // No need to rereister here, as handshake is complete;
     return err;
 }
