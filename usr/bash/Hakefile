@@ -12,6 +12,7 @@
 
 [ build application { target = "bash",
   		              cFiles = [ "bash.c" ],
+  		              addLibraries = [ "fs" ],
                       addLinkFlags = [ "-e _start"],
                       architectures = allArchitectures
                     }

@@ -53,6 +53,9 @@ struct spawninfo {
 errval_t spawn_load_by_name(void * binary_name, struct spawninfo * si,
         coreid_t core_id);
 
+errval_t spawn_load_by_name_args(void * binary_name, struct spawninfo * si,
+        coreid_t core_id, char* extra_args);
+
 errval_t setup_cspace(struct spawninfo *si);
 errval_t mapping_cb(void* mapping_state, struct capref cap);
 errval_t setup_vspace(struct spawninfo *si);
@@ -63,5 +66,6 @@ errval_t setup_dispatcher(struct spawninfo *si, coreid_t core_id);
 errval_t elf_section_allocate(void *state, genvaddr_t base, size_t size,
                               uint32_t flags, void **ret);
 errval_t setup_args(struct spawninfo* si, struct mem_region* mr);
+errval_t setup_args_extra(struct spawninfo* si, struct mem_region* mr, char *extra);
 
 #endif /* _INIT_SPAWN_H_ */

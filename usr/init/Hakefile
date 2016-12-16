@@ -17,11 +17,7 @@
                         "main.c",
                         "mem_alloc.c",
                         "rpc_server.c",
-                        "scheduler.c",
-                        "distops/caplock.c",
-                        "distops/capqueue.c",
-                        "distops/deletestep.c",
-                        "distops/invocations.c"
+                        "scheduler.c"
                       ],
                       addLinkFlags = [ "-e _start_init"],
                       addLibraries = [ "urpc", "mm", "getopt", "elf", "spawn" ],

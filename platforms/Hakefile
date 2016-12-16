@@ -13,7 +13,6 @@
 let    -- Default list of modules to build/install
     modules_common = [ "init", "sdma", "sdma_test", "hello", "byebye", "memeater", "filereader", "mmchs”, “bash”]
 
-
     -- ARMv7-a Pandaboard modules: ADd
     pandaModules = [ "/sbin/" ++ f | f <- [
                         "cpu_omap44xx"

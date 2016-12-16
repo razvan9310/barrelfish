@@ -24,36 +24,41 @@
 
 int main(int argc, char *argv[])
 {
-	debug_printf("RPC: Trying to spawn bybye process on core 1\n");
-
-	domainid_t pid;
-
-    errval_t err =  aos_rpc_process_spawn(get_init_rpc(), "byebye", 1, &pid);
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "could not spawn a process on core 1\n");
-        return err;
+    //printf("\033[2J");
+	debug_printf("Hello from hello process\n");
+    debug_printf("Arguments to hello are\n");
+    for(int i=0; i<argc; i++) {
+        debug_printf("%s\n", argv[i]);
     }
-    debug_printf("Pid for byebye on core 1 is %u\n", pid);
 
-    char* name;
-    debug_printf("Trying to retireve process name for pid %u on core 1\n", pid);
-    err =  aos_rpc_process_get_name(get_init_rpc(), pid, 1, &name);
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "could not retrieve process name from core 1\n");
-        return err;
-    }
-    debug_printf("!!!!!!Process with pid %u on core 1 is %s\n", pid, name);
+	// domainid_t pid;
 
-    domainid_t *pids;
-    size_t pid_count;
+ //    errval_t err =  aos_rpc_process_spawn(get_init_rpc(), "byebye", 1, &pid);
+ //    if (err_is_fail(err)) {
+ //        DEBUG_ERR(err, "could not spawn a process on core 1\n");
+ //        return err;
+ //    }
+ //    debug_printf("Pid for byebye on core 1 is %u\n", pid);
 
-    debug_printf("Trying to retireve list of all PIDs on core 1\n");
-    err =  aos_rpc_process_get_all_pids(get_init_rpc(), 1, &pids, &pid_count);
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "could not retrieve process list from core 1\n");
-        return err;
-    }
-    debug_printf("!!!!!!Process pid_count on core 1 %u \n", pid_count);
+ //    char* name;
+ //    debug_printf("Trying to retireve process name for pid %u on core 1\n", pid);
+ //    err =  aos_rpc_process_get_name(get_init_rpc(), pid, 1, &name);
+ //    if (err_is_fail(err)) {
+ //        DEBUG_ERR(err, "could not retrieve process name from core 1\n");
+ //        return err;
+ //    }
+ //    debug_printf("!!!!!!Process with pid %u on core 1 is %s\n", pid, name);
+
+ //    domainid_t *pids;
+ //    size_t pid_count;
+
+ //    debug_printf("Trying to retireve list of all PIDs on core 1\n");
+ //    err =  aos_rpc_process_get_all_pids(get_init_rpc(), 1, &pids, &pid_count);
+ //    if (err_is_fail(err)) {
+ //        DEBUG_ERR(err, "could not retrieve process list from core 1\n");
+ //        return err;
+ //    }
+ //    debug_printf("!!!!!!Process pid_count on core 1 %u \n", pid_count);
 
 
  //    /*err =  aos_rpc_process_spawn(get_init_rpc(), "byebye", 0, &pid);
@@ -63,10 +68,7 @@ int main(int argc, char *argv[])
  //    }
  //    debug_printf("byebye 2 has pid %u\n", pid);*/
 
-    
 
-    printf("Hello, world! (this is printed by hello)\n");
-    
     // char* c = (char*) malloc(128 * 1024 * 1024);
     // *c = 'H';
     // sys_debug_flush_cache();

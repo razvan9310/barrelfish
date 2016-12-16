@@ -28,9 +28,27 @@
 #include "coreboot.h"
 #include "mem_alloc.h"
 #include "scheduler.h"
+#include "rpc_server.h"
 
 coreid_t my_core_id;
 struct bootinfo *bi;
+
+static char c;
+void terminal_read_handler(void *params);
+void terminal_read_handler(void *params)
+{
+    debug_printf("I am in terminal_read_handler!!");
+    sys_getchar(&c);
+
+    debug_printf("%c\n", c);
+    debug_printf("We got an interrupt for a character\n");
+}
+
+
+// static void pesudo_task(void)
+// {
+//     debug_printf("Hello World\n");
+// }
 
 int main(int argc, char *argv[])
 {
@@ -93,7 +111,6 @@ int main(int argc, char *argv[])
         CHECK("reading modules from URPC",
                 read_modules(urpc_buf, bi, my_core_id));
     }
-
     // Initialize URPC for subsequent inter-core communication attempts.
     urpc_init(urpc_buf, my_core_id);
 
@@ -102,24 +119,25 @@ int main(int argc, char *argv[])
 
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
     CHECK("Copy to initep", cap_copy(cap_initep, lc->local_cap));
-    
+
     if (my_core_id == 0) {
         CHECK("spawning sdma",
                 spawn_load_by_name(
                         "sdma",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)),
                         my_core_id));
-
+        uint32_t i = 0;
+        while(i<1000000) {
+            i++;
+        }
         CHECK("spawning bash",
                 spawn_load_by_name("bash",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+        add_process_ps_list("init");
+        add_process_ps_list("sdma");
+        add_process_ps_list("bash");
     } else {
-        // Spawn "Byebye" on core 1.
-        // CHECK("spawning byebye",
-        //         spawn_load_by_name(
-        //                 "byebye",
-        //                 (struct spawninfo*) malloc(sizeof(struct spawninfo)),
-        //                 my_core_id));
+        add_process_ps_list("init");
     }
 
     debug_printf("Message handler loop\n");

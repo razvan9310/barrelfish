@@ -28,6 +28,8 @@ Notes:
 
 ///// private function definitions ///////////////////////////////////////////
 
+static struct thread_mutex mutex;
+
 static errval_t mm_slot_alloc(struct mm *mm, struct capref *retcap) {
     struct slot_prealloc* sa = (struct slot_prealloc*) mm->slot_alloc_inst;
     if (sa->meta[sa->current].free < SLOT_RESERVE &&
@@ -135,6 +137,7 @@ errval_t mm_init(struct mm *mm, enum objtype objtype,
                  slot_refill_t slot_refill_func,
                  void *slot_alloc_inst)
 {
+    thread_mutex_init(&mutex);
     assert(mm != NULL);
     if (slab_refill_func == NULL) {
         slab_refill_func = slab_default_refill;
@@ -217,6 +220,7 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t wanted_size, size_t alignment, s
     // print_mm_state(mm);
 
     // RAM caps must aligned to BASE_PAGE_SIZE on both ends
+    //thread_mutex_lock(&mutex);
     gensize_t size = ROUND_UP(wanted_size, BASE_PAGE_SIZE);
     alignment = ROUND_UP(alignment, BASE_PAGE_SIZE);
     if (alignment == 0) {
@@ -268,6 +272,7 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t wanted_size, size_t alignment, s
         // 4. we're done here
         // debug_printf("*** mm: allocated %llx bytes at base %llx\n", found->size, found->base);
         *retcap = found->cap.cap;
+        //thread_mutex_unlock(&mutex);
         return SYS_ERR_OK;
     }
     // NOTE: release lock here
