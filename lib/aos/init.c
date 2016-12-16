@@ -87,7 +87,7 @@ static size_t syscall_terminal_write(const char *buf, size_t len)
 static size_t aos_terminal_write(const char* buf, size_t len)
 {
     if (len > 0) {
-        debug_printf("init.c: calling aos_rpc_send_string\n");
+        // debug_printf("init.c: calling aos_rpc_send_string\n");
         return aos_rpc_send_string(get_init_rpc(), buf, 0);
     }
     return 0;
@@ -165,7 +165,7 @@ static void handle_pagefault(int subtype,
 
     struct capref frame;
     size_t retsize;
-    err = frame_alloc(&frame, BASE_PAGE_SIZE, &retsize);
+    err = frame_alloc(&frame, 4 * BASE_PAGE_SIZE, &retsize);
     if (err_is_fail(err)) {
         debug_printf("Pagefault handler erred during frame_alloc: %s\n",
                 err_getstring(err));
