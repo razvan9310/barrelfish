@@ -341,7 +341,7 @@ errval_t aos_rpc_serial_getchar_send_handler(void* void_args)
     char* to_get = (char*) args[1];
 
     lmp_chan_send2(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
-                   AOS_RPC_GETCHAR, *to_get);
+                   AOS_RPC_GETCHAR, (uintptr_t) to_get);
 
     // N. get new cycle counter value, show result
     // uint32_t cycle_counter_end = perf_measurement_get_counter();
@@ -369,11 +369,11 @@ errval_t aos_rpc_serial_getchar_recv_handler(void* void_args)
         lmp_chan_register_recv(&rpc->lc, rpc->ws,
                 MKCLOSURE((void*) aos_rpc_serial_getchar_recv_handler, args));
     }
-
-    printf("&&&&& %c\n", msg.words[2]);
     // This should be an ACK only.
-    assert(msg.buf.msglen == 1);
+    assert(msg.buf.msglen == 2);
     assert(msg.words[0] == AOS_RPC_OK);
+    char* to_get = (char*) args[1];
+    *to_get = msg.words[1];
 
     // N. get new cycle counter value, show result
     // uint32_t cycle_counter_end = perf_measurement_get_counter();
