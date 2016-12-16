@@ -82,6 +82,7 @@ struct core_state_generic {
     struct waitset default_waitset;
     struct monitor_binding *monitor_binding;
     struct aos_rpc *init_rpc;
+    struct aos_ns_rpc *ns_rpc;
     struct morecore_state morecore_state;
     struct paging_state *paging_state;
     struct ram_alloc_state ram_alloc_state;

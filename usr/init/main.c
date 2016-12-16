@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
             my_core_id);
     CHECK("forging RAM cap & retrieving bi from URPC frame",
             read_from_urpc(urpc_buf, &bi, my_core_id));
-    CHECK("start core 1", start_core(1, my_core_id, bi));
+    // CHECK("start core 1", start_core(1, my_core_id, bi));
 
     if (my_core_id == 1) {
         err = initialize_ram_alloc(&remaining_mem_base, &remaining_mem_size);
@@ -106,9 +106,14 @@ int main(int argc, char *argv[])
 
     if (my_core_id == 0) {
         // Spawn "Hello" on core 0.
-        CHECK("spawning hello",
-                spawn_load_by_name("hello",
-                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+        CHECK("spawning nameserver",
+                 spawn_load_by_name("nameserver",
+                         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+
+
+        //CHECK("spawning hello",
+                // spawn_load_by_name("hello",
+                //         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
     } else {
         // Spawn "Byebye" on core 1.
         // CHECK("spawning byebye",

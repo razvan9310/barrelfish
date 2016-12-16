@@ -17,6 +17,8 @@
 extern coreid_t my_core_id;
 static domainid_t last_issued_pid = 1;
 
+int n_requests = 0;
+
 struct system_ps* ps = NULL;
 
 struct client_state* identify_client(struct capref* cap,
@@ -135,6 +137,14 @@ void* process_local_handshake_request(struct capref* request_cap,
 
     // New channel.
     lmp_chan_accept(&new_client->lc, DEFAULT_LMP_BUF_WORDS, *request_cap);
+
+    if (n_requests == 0) {
+        n_requests++;
+        errval_t err = cap_copy(cap_nsep, *request_cap);
+        if(err_is_fail(err)) {
+            printf("%s\n", err_getstring(err));
+        }
+    }
 
     // Return response args.
     return (void*) &new_client->lc;

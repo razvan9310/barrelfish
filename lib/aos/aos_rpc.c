@@ -50,7 +50,7 @@ errval_t aos_rpc_send_number_send_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_send_number_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_send_number_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     return SYS_ERR_OK;
@@ -85,7 +85,7 @@ errval_t aos_rpc_send_number_recv_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_send_number_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_send_number_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     return err;
@@ -247,7 +247,7 @@ errval_t aos_rpc_ram_send_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_ram_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_ram_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
     return SYS_ERR_OK;
 }
@@ -295,7 +295,7 @@ errval_t aos_rpc_ram_recv_handler(void* void_args)
    // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_ram_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_ram_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     // No need to reregister, we got our RAM.
@@ -346,7 +346,7 @@ errval_t aos_rpc_serial_getchar_send_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_getchar_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_getchar_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
    return SYS_ERR_OK;
@@ -378,7 +378,7 @@ errval_t aos_rpc_serial_getchar_recv_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_getchar_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_getchar_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     return SYS_ERR_OK;
@@ -437,7 +437,7 @@ errval_t aos_rpc_putchar_send_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_putchar_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_putchar_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
    return SYS_ERR_OK;
@@ -468,7 +468,7 @@ errval_t aos_rpc_putchar_recv_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_putchar_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_putchar_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     return SYS_ERR_OK;
@@ -817,7 +817,7 @@ errval_t aos_rpc_handshake_send_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_handshake_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_handshake_send: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     return SYS_ERR_OK;
@@ -851,7 +851,7 @@ errval_t aos_rpc_handshake_recv_handler(void* void_args)
     // N. get new cycle counter value, show result
     uint32_t cycle_counter_end = perf_measurement_get_counter();
     if (cycle_counter_end > cycle_counter_begin) {  // otherwise it overflowed and doesn't make much sense
-        debug_printf(" *** performance measurement: aos_rpc_handshake_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
+        // debug_printf(" *** performance measurement: aos_rpc_handshake_recv: %u cycles\n", cycle_counter_end - cycle_counter_begin);
     }
 
     // No need to rereister here, as handshake is complete;

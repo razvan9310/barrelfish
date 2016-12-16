@@ -39,6 +39,7 @@ struct aos_rpc {
     int ps_offset;
 };
 
+
 errval_t aos_rpc_handshake_send_handler(void* void_args);
 errval_t aos_rpc_handshake_recv_handler(void* void_args);
 errval_t aos_rpc_putchar_send_handler(void* void_args);

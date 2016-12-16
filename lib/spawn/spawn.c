@@ -358,6 +358,25 @@ errval_t setup_cspace(struct spawninfo* si)
     // CHECK("Copy cap", cap_copy(cap_initep, parent_chan.local_cap));
     CHECK("err in cap copy from local cap\n", cap_copy(parent_initep, cap_initep));
 
+    //3.2 Set up NS 
+    struct capref parent_nsep = {
+        .cnode = si->l2_cnodes[ROOTCN_SLOT_TASKCN],
+        .slot = TASKCN_SLOT_NSEP
+    };
+
+    if (!strcmp(si->binary_name, "nameserver") || !strcmp(si->binary_name, "/usr/sbin/nameserver")) {
+        // Copy kernel cap over to SDMA driver?
+        struct capref child_kernel_cap = {
+            .cnode = si->l2_cnodes[ROOTCN_SLOT_TASKCN],
+            .slot = TASKCN_SLOT_KERNELCAP
+        };
+        CHECK("copying cap_kernel over to SDMA driver",
+                cap_copy(child_kernel_cap, cap_kernel));
+    }
+
+    // CHECK("Copy cap", cap_copy(cap_initep, parent_chan.local_cap));
+    cap_copy(parent_nsep, cap_nsep);
+
     // 4. Allocate some RAM for BASE_PAGE_CN slots.
     struct capref cap = {
         .cnode = si->l2_cnodes[ROOTCN_SLOT_BASE_PAGE_CN]
