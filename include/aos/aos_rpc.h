@@ -72,6 +72,8 @@ errval_t aos_rpc_irq_send_handler(void* void_args);
 errval_t aos_rpc_irq_recv_handler(void* void_args);
 errval_t aos_rpc_sdma_ep_send_handler(void* void_args);
 errval_t aos_rpc_sdma_ep_recv_handler(void* void_args);
+errval_t aos_rpc_send_data_send_handler(void* void_args);
+errval_t aos_rpc_send_data_recv_handler(void* void_args);
 
 /**
  * \brief send a number over the given channel
@@ -124,7 +126,7 @@ errval_t aos_rpc_process_spawn(struct aos_rpc *chan, char *name,
  * \arg argv array storing the values of arguments
  * \arg newpid the process id of the newly spawned process
  */
-errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, char *name, 
+errval_t aos_rpc_process_spawn_args(struct aos_rpc *chan, char *name,
                                     coreid_t core, domainid_t *newpid);
 
 /**
@@ -179,5 +181,27 @@ errval_t aos_rpc_get_sdma_ep_cap(struct aos_rpc* rpc, struct capref* retcap);
  * on how you design your message passing code.
  */
 errval_t aos_rpc_init(struct aos_rpc *rpc, struct waitset* ws);
+
+/**
+ * \brief Send data to the other RPC endpoint and poke the receiver. Binary-safe.
+ */
+errval_t aos_rpc_send_data(struct aos_rpc *rpc, void *data, size_t len);
+
+/**
+ * \brief Open a UDP socket.
+ * \param transport Right now ignored -- everything is UDP
+ * \param socket Will be filled with a cap to the newly-opened socket
+ */
+errval_t aos_rpc_socket_open(struct aos_rpc *rpc, int transport, uint32_t laddr, uint16_t lport, struct capref *socket);
+
+/**
+ * \brief Send data over a previously-opened UDP socket.
+ */
+errval_t aos_rpc_socket_send(struct aos_rpc *rpc, struct capref socket, uint32_t dst4, uint16_t dport, void* buf, size_t len);
+
+/**
+ * \brief Subscribe for receiving data (asynchronously).
+ */
+errval_t aos_rpc_socket_listen(struct aos_rpc *rpc, uint32_t dst4, uint16_t dport, void* buf, size_t len);
 
 #endif // _LIB_BARRELFISH_AOS_MESSAGES_H

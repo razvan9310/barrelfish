@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
     err = invoke_kernel_get_core_id(cap_kernel, &my_core_id);
     assert(err_is_ok(err));
     disp_set_core_id(my_core_id);
-    
+
     debug_printf("init: on core %" PRIuCOREID " invoked as:", my_core_id);
     for (int i = 0; i < argc; i++) {
        printf(" %s", argv[i]);
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
         if(err_is_fail(err)){
             DEBUG_ERR(err, "initialize_ram_alloc");
         }
-        
+
         CHECK("reading modules from URPC",
                 read_modules(urpc_buf, bi, my_core_id));
     }
@@ -146,6 +146,12 @@ int main(int argc, char *argv[])
         add_process_ps_list("bash");
     } else {
         add_process_ps_list("init");
+    }
+
+    if (my_core_id == 1) { // let's give something to do to core 1 too :D
+        CHECK("spawning net",
+                spawn_load_by_name("net",
+                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
     }
 
     debug_printf("Message handler loop\n");

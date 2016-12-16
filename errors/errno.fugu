@@ -911,7 +911,7 @@ errors fs FS_ERR_ {
     failure NOTFOUND            "The given name does not exist",
     failure EXISTS              "The given name already exists",
     failure NOTEMPTY            "The given directory is not empty",
-    
+
     failure READ                "Failure during file read",
     failure WRITE               "Failure during writing the file",
     failure OPEN                "Failure during open",
@@ -1274,4 +1274,13 @@ errors cpuid CPUID_ERR_ {
 errors aos AOS_ERR_ {
     failure LMP_SEND_FAILURE        "Failure while sending AOS LMP message",
     failure LMP_MSGTYPE_UNKNOWN     "Unknown message type for AOS LMP implementation",
+};
+
+// errors for AOS networking stack
+errors net NET_ERR_ {
+    failure INVALID_PACKET          "Packet does not conform to the spec",
+    failure NOT_SUPPORTED           "Functionality not supported by this networking stack",
+    failure SOCKETS_EXHAUSTED       "Maximum number of sockets reached",
+    failure CONN_REFUSED            "Nobody's listening!",
+    failure PORT_RESERVED           "Will not give you a reserved port number",
 };
