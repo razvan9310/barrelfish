@@ -203,7 +203,7 @@ static inline errval_t rpc_sdma_ep_cap(struct capref* retcap)
  * \bief General-purpose local RPC server-side receive handler. This is the
  * entry point into local (same-core) request handling.
  */
-errval_t local_recv_handler(void* arg);
+errval_t local_recv_once_handler(void* arg);
 
 /**
  * \brief Processes a new client same-core handshake request.

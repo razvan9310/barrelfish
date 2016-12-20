@@ -46,9 +46,8 @@ errval_t sdma_rpc_init(struct sdma_rpc* rpc, struct waitset* ws)
 {
     rpc->ws = ws;
 
-    // 1. Get SDMA driver endpoint cap from Init.
-    CHECK("sdma_rpc_init: aos_rpc_get_sdma_ep_cap",
-            aos_rpc_get_sdma_ep_cap(get_init_rpc(), &cap_sdma_ep));
+    // CHECK("sdma_rpc_init: aos_rpc_get_sdma_ep_cap",
+    //         aos_rpc_get_sdma_ep_cap(get_init_rpc(), &cap_sdma_ep));
 
     // 2. Create local channel using SDMA driver as remote endpoint.
     CHECK("sdma_rpc_init: lmp_chan_accept",
@@ -62,9 +61,11 @@ errval_t sdma_rpc_init(struct sdma_rpc* rpc, struct waitset* ws)
             lmp_chan_alloc_recv_slot(&rpc->lc));
 
     // 5. Send handshake request to SDMA driver and wait for ACK.
+    debug_printf("BEFORE sdma_rpc_init: send and receive, rpc is at %p\n", rpc);
     CHECK("sdma_rpc_init: sdma_rpc_send_and_receive",
             sdma_rpc_send_and_receive(&args, sdma_rpc_handshake_send_handler,
                     sdma_rpc_handshake_recv_handler));
+    debug_printf("AFTER sdma_rpc_init: send and receive\n");
 
     // By now we've successfully established the underlying LMP channel for RPC.
     rpc->request_pending = false;
@@ -82,11 +83,13 @@ errval_t sdma_rpc_handshake_send_handler(void* void_args)
     struct sdma_rpc *rpc = (struct sdma_rpc*) args[0];
     errval_t err;
     size_t retries = 0;
+    debug_printf("BEFORE handshake send\n");
     do {
         err = lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
                 SDMA_RPC_HANDSHAKE);
         ++retries;
     } while (err_is_fail(err) && retries < 1);
+    debug_printf("AFTER handshake send\n");
 
     if (err_is_fail(err)) {
         DEBUG_ERR(err, "Handshake retry limit exceeded");

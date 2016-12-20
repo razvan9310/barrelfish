@@ -31,15 +31,15 @@ int main(int argc, char** argv)
 	}
 
 	// Spawn sdma_test.
-	domainid_t pid;
-	err =  aos_rpc_process_spawn(get_init_rpc(), "sdma_test", 0, &pid);
-    if (err_is_fail(err)) {
-    	USER_PANIC_ERR(err, "aos_rpc_process_spawn failed");
-    }
-    debug_printf("Pid for sdma_test is %u\n", pid);
+	// domainid_t pid;
+	// err =  aos_rpc_process_spawn(get_init_rpc(), "sdma_test", 0, &pid);
+ //    if (err_is_fail(err)) {
+ //    	USER_PANIC_ERR(err, "aos_rpc_process_spawn failed");
+ //    }
+ //    debug_printf("Pid for sdma_test is %u\n", pid);
 
 	// Loop waiting for SDMA interrupts.
-	struct waitset* init_ws = get_init_rpc()->ws;
+	// struct waitset* init_ws = get_init_rpc()->ws;
 	size_t num_sdma_events = 1;
 	while(true) {
 		// SDMA server waitset.
@@ -50,11 +50,11 @@ int main(int argc, char** argv)
 			}
 		}
 
-		// Init-only waitset.
-		err = event_dispatch_non_block(init_ws);
-		if (err_is_fail(err) && err != LIB_ERR_NO_EVENT) {
-			USER_PANIC_ERR(err, "event_dispatch_non_block on init ws");
-		}
+		// // Init-only waitset.
+		// err = event_dispatch_non_block(init_ws);
+		// if (err_is_fail(err) && err != LIB_ERR_NO_EVENT) {
+		// 	USER_PANIC_ERR(err, "event_dispatch_non_block on init ws");
+		// }
 	}
 
 	return 0;

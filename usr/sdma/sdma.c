@@ -18,6 +18,7 @@
 #include <aos/aos_rpc.h>
 #include <aos/waitset.h>
 #include <driverkit/driverkit.h>
+#include <nameserver_rpc.h>
 #include <omap44xx_map.h>
 #include <omap_timer/timer.h>
 
@@ -116,18 +117,45 @@ errval_t sdma_setup_config(struct sdma_driver* sd)
 
 errval_t sdma_setup_rpc_server(struct sdma_driver* sd)
 {
-    sd->lc = get_init_rpc()->lc;
+    // sd->lc = get_init_rpc()->lc;
 
-    static struct aos_rpc new_aos_rpc;
-    static struct waitset init_ws;
-    waitset_init(&init_ws);
-    CHECK("initializing new aos_rpc_init",
-            aos_rpc_init(&new_aos_rpc, &init_ws));
-    set_init_rpc(&new_aos_rpc);
+    // struct capability ret;
+    // errval_t err = debug_cap_identify(sd->lc.local_cap, &ret);
+    // if (err_is_fail(err)) {
+    //     DEBUG_ERR(err, "identifying sdma local_cap cap");
+    //     return err;
+    // }
 
+    // debug_printf("!!!!!!!!!!!!!!!!!!!! SDMA Driver local_cap.listener=%u, "
+    //         "local_cap..epoffset=%u, local_cap.epbuflen=%u\n",
+    //         ret.u.endpoint.listener, ret.u.endpoint.epoffset,
+    //         ret.u.endpoint.epbuflen);
+
+    // static struct aos_rpc new_aos_rpc;
+    // static struct waitset init_ws;
+    // waitset_init(&init_ws);
+    // CHECK("initializing new aos_rpc_init",
+    //         aos_rpc_init(&new_aos_rpc, &init_ws));
+    // set_init_rpc(&new_aos_rpc);
+
+    static struct aos_ns_rpc new_aos_ns_rpc;
+    new_aos_ns_rpc.it = 0;
+
+    static struct waitset ns_ws;
+    waitset_init(&ns_ws);
+
+    CHECK("initializing new aos_ns_rpc_init",
+            aos_ns_init(&new_aos_ns_rpc, &ns_ws));
+
+    debug_printf("Trying to register the SDMA driver with the Nameserver\n");
+    CHECK("Registering the SDMA driver",
+            register_service(&new_aos_ns_rpc, "sdma"));
+    debug_printf("Successfully registered SDMA driver with the Nameserver.\n");
+
+    sd->lc = new_aos_ns_rpc.lc;
     CHECK("creating SDMA channel slot", lmp_chan_alloc_recv_slot(&sd->lc));
-    CHECK("copying local cap to cap_sdma_ep",
-            cap_copy(cap_sdma_ep, sd->lc.local_cap));
+    // CHECK("copying local cap to cap_sdma_ep",
+    //         cap_copy(cap_sdma_ep, sd->lc.local_cap));
 
     size_t recv_arg_size = ROUND_UP(sizeof(struct sdma_driver*), 4)
             + ROUND_UP(sizeof(struct lmp_chan), 4)

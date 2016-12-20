@@ -487,6 +487,7 @@ errval_t aos_rpc_process_spawn_send_handler(void* void_args)
         ++retries;
     } while (err_is_fail(err) && retries < 5);
     if (retries == 5) {
+        DEBUG_ERR(err, "aos_rpc spawn failed to send LMP message\n");
         return err;
     }
 
@@ -1128,9 +1129,13 @@ errval_t aos_rpc_handshake_send_handler(void* void_args)
         err = lmp_chan_send1(&rpc->lc, LMP_FLAG_SYNC, rpc->lc.local_cap,
                 AOS_RPC_HANDSHAKE);
         ++retries;
-    } while (err_is_fail(err) && retries < 5);
+    } while (err_is_fail(err) && retries < 5000000);
 
-    return SYS_ERR_OK;
+    if (err_is_fail(err)) {
+        USER_PANIC_ERR(err, "handshake send failed");
+    }
+
+    return err;
 }
 
 /**

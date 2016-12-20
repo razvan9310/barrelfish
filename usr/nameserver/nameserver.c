@@ -200,7 +200,12 @@ void* ns_process_register(struct lmp_chan* lc, struct capref* client_cap, struct
         return NULL;
     }
 
-    client->service_ep = *client_cap;
+    slot_alloc(&client->service_ep);
+    errval_t err = cap_copy(client->service_ep, *client_cap);
+    if (err_is_fail(err)) {
+        USER_PANIC_ERR(err, "copying client cap to service_cp");
+    }
+    // client->service_ep = *client_cap;
     client->is_server = true;
 
     int rem_words = 7;
@@ -219,6 +224,9 @@ void* ns_process_register(struct lmp_chan* lc, struct capref* client_cap, struct
 
     strncpy(name, message, length);
     client->name = name;
+    debug_printf("Registered new service \"%s\", with service_ep (cnode, slot) "
+            "= (%u, %u)\n", client->name, client->service_ep.cnode.cnode,
+            client->service_ep.slot);
 
     // debug_printf("SERVER: received register request from %s\n", client->name);
     // Response args.
@@ -608,6 +616,8 @@ void* ns_process_lookup(struct lmp_chan* lc, struct lmp_recv_msg msg)
     args = (void*) ROUND_UP((uintptr_t) args + sizeof(bool), 4);
 
     if (found) {
+        debug_printf("Nameserver sending cap for looked-up service: %s\n",
+                name);
         *((struct capref*) args) = aux->service_ep;
     }
 
@@ -667,7 +677,7 @@ void ns_serve_rpc(void* arg)
         
         case AOS_NS_LOOKUP:
             debug_printf("SERVER: serving ns_request with TAG = %s\n", "AOS_NS_LOOKUP");
-            response_fn = (void*) ns_send_simple_ok;
+            response_fn = (void*) ns_send_ep;//ns_send_simple_ok;
             response_args = ns_process_lookup(lc, msg);
             break;
 
@@ -689,7 +699,7 @@ void ns_serve_rpc(void* arg)
 
 int main(int argc, char *argv[])
 {
-    // debug_printf("Hello, this is the nameserver process\n");
+    debug_printf("Hello, this is the nameserver process\n");
     
     struct lmp_chan lc = get_init_rpc()->lc;
 
@@ -715,13 +725,14 @@ int main(int argc, char *argv[])
     // debug_printf("%c%c\n", *c, *(c + 64 * 1024 * 1024));
 
 
-    domainid_t pid;
+    // domainid_t pid;
 
-    errval_t err =  aos_rpc_process_spawn(get_init_rpc(), "service_a", 0, &pid);
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "could not spawn a client process\n");
-        return err;
-    }
+    errval_t err;
+    // err =  aos_rpc_process_spawn(get_init_rpc(), "service_a", 0, &pid);
+    // if (err_is_fail(err)) {
+    //     DEBUG_ERR(err, "could not spawn a client process\n");
+    //     return err;
+    // }
     // debug_printf("Pid for service_a is %u\n", pid);
 
     struct waitset *default_ws = get_default_waitset();

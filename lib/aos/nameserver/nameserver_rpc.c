@@ -288,9 +288,9 @@ errval_t aos_ns_lookup_recv_handler(void* void_args)
     
     struct aos_ns_rpc* rpc = (struct aos_ns_rpc*) args[0];
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct capref* dst = (struct capref*) args[9];
 
-    struct capref cap;
-    errval_t err = lmp_chan_recv(&rpc->lc, &msg, &cap);
+    errval_t err = lmp_chan_recv(&rpc->lc, &msg, dst);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         // Reregister.
         lmp_chan_register_recv(&rpc->lc, rpc->ws,
@@ -300,15 +300,16 @@ errval_t aos_ns_lookup_recv_handler(void* void_args)
     assert(msg.buf.msglen == 1);
 
     assert(msg.words[0] == AOS_NS_OK);
-    // No need to reregister, we got our RAM.
+    debug_printf("ns lookup recv: received in cap at %p\n", dst);
     return err;
 }
 
 errval_t lookup(struct aos_ns_rpc* rpc, char* name, struct capref* ep)
 {
-    uintptr_t* args = (uintptr_t*) malloc(9 * sizeof(uintptr_t));
-    args[0] = (uintptr_t) ((struct aos_ns_rpc*) malloc(sizeof(struct aos_ns_rpc)));
-    *((struct aos_ns_rpc*) args[0]) = *rpc;
+    uintptr_t* args = (uintptr_t*) malloc(10 * sizeof(uintptr_t));
+    // args[0] = (uintptr_t) ((struct aos_ns_rpc*) malloc(sizeof(struct aos_ns_rpc)));
+    // *((struct aos_ns_rpc*) args[0]) = *rpc;
+    args[0] = (uintptr_t) rpc;
 
     args[1] = (uintptr_t) ((int*) malloc(sizeof(int)));
     int length = (int)strlen(name);
@@ -327,13 +328,16 @@ errval_t lookup(struct aos_ns_rpc* rpc, char* name, struct capref* ep)
         romaining_length -= 4;
     }
 
+
+    args[9] = (uintptr_t) ep;
+
+    CHECK("lmp_chan_alloc_recv_slot for lookup", 
+            lmp_chan_alloc_recv_slot(&rpc->lc));  
     // debug_printf("BEFORE Calling send_and_receive (lookup): %s\n", name);
 
     CHECK("nameserver_rpc.c#lookup: aos_ns_send_and_receive",
     aos_ns_send_and_receive(args, aos_ns_lookup_send_handler,
             aos_ns_lookup_recv_handler));
-
-
 
     return SYS_ERR_OK;
 }

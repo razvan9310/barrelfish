@@ -18,7 +18,7 @@ extern coreid_t my_core_id;
 extern struct bootinfo *bi;
 static domainid_t last_issued_pid = 1;
 
-int n_requests = 0;
+static size_t n_requests = 0;
 
 struct system_ps* ps = NULL;
 
@@ -42,6 +42,19 @@ struct client_state* identify_client(struct capref* cap,
     }
     
     return client;
+}
+
+errval_t local_recv_once_handler(void* arg)
+{
+    struct lmp_chan** lc = (struct lmp_chan**) arg;
+    arg = (void*) ROUND_UP((uintptr_t) arg + sizeof(struct lmp_chan*), 4);
+    struct client_state** clients = (struct client_state**) arg;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct capref cap;
+    
+    lmp_chan_recv(*lc, &msg, &cap);
+
+    return serve_locally(&msg, &cap, clients);
 }
 
 errval_t serve_locally(struct lmp_recv_msg* msg, struct capref* cap,
@@ -138,12 +151,6 @@ void* process_local_handshake_request(struct capref* request_cap,
             sizeof(struct client_state));
     if (*clients == NULL) {
         new_client->next = new_client->prev = NULL;
-        // The first RPC client is the SDMA driver (trusted by init), thus save
-        // the cap to a well-known place.
-        errval_t err = cap_copy(cap_sdma_ep, *request_cap);
-        if (err_is_fail(err)) {
-            USER_PANIC_ERR(err, "failed to copy cap_sdma_ep");
-        }
     } else {
         (*clients)->prev = new_client;
         new_client->next = *clients;
@@ -167,13 +174,36 @@ void* process_local_handshake_request(struct capref* request_cap,
     // New channel.
     lmp_chan_accept(&new_client->lc, DEFAULT_LMP_BUF_WORDS, *request_cap);
 
-    if (n_requests == 0) {
-        n_requests++;
-        errval_t err = cap_copy(cap_nsep, *request_cap);
-        if(err_is_fail(err)) {
-            printf("%s\n", err_getstring(err));
+    if (my_core_id == 0) {
+        if (n_requests == 0) {
+            // Nameserver is connecting..
+            errval_t err = cap_copy(cap_nsep, *request_cap);
+            if (err_is_fail(err)) {
+                USER_PANIC_ERR(err, "failed to copy cap_nsep");
+            }
+            // debug_printf("Saved Nameserver cap to cap_nsep, n_requests is now "
+            //         "%u\n", n_requests);
+        } else if (n_requests == 1) {
+            // SDMA driver is connecting.
+            errval_t err = cap_copy(cap_sdma_ep, *request_cap);
+            if (err_is_fail(err)) {
+                USER_PANIC_ERR(err, "failed to copy cap_sdma_ep");
+            }
+
+            // err = debug_cap_identify(cap_sdma_ep, &ret);
+            // if (err_is_fail(err)) {
+            //     DEBUG_ERR(err, "identifying sdma_ep cap");
+            //     return NULL;
+            // }
+
+            // debug_printf("Saved SDMA Driver cap to cap_sdma_ep, n_requests is "
+            //         "now %u, cap_sdma_ep.listener=%u, cap_sdma_ep.epoffset=%u, "
+            //         "cap_sdma_ep.epbuflen=%u\n", n_requests,
+            //         ret.u.endpoint.listener, ret.u.endpoint.epoffset,
+            //         ret.u.endpoint.epbuflen);
         }
     }
+    n_requests++;
 
     // Return response args.
     return (void*) &new_client->lc;
@@ -858,6 +888,18 @@ void* process_local_sdma_ep_cap_request(struct lmp_recv_msg* msg,
 
     struct capref sdma_ep_cap;
     errval_t err = rpc_sdma_ep_cap(&sdma_ep_cap);
+
+    struct capability ret;
+    err = debug_cap_identify(sdma_ep_cap, &ret);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "identifying sdma_ep cap");
+        return NULL;
+    }
+
+    debug_printf("ASDFG RETURNING SDMA Driver cap to. sdma_ep_cap.listener=%u, "
+            "sdma_ep_cap.epoffset=%u, sdma_ep_cap.epbuflen=%u\n",
+            ret.u.endpoint.listener, ret.u.endpoint.epoffset,
+            ret.u.endpoint.epbuflen);
 
     // Response args.
     size_t args_size = ROUND_UP(sizeof(struct lmp_chan), 4)

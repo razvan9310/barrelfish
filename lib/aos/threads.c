@@ -85,13 +85,13 @@ __attribute__((unused)) static bool stack_warned=0;
 /// Wrapper function for most threads, runs given function then deletes itself
 static void thread_entry(thread_func_t start_func, void *start_data)
 {
-    debug_printf("I am in thread_entry!!\n");
+    // debug_printf("I am in thread_entry!!\n");
     assert((lvaddr_t)start_func >= BASE_PAGE_SIZE);
     int retval = start_func(start_data);
-    debug_printf("After start function\n");
+    // debug_printf("After start function\n");
     thread_exit(retval);
     assert(!"thread_exit returned");
-    debug_printf("I am out of thread_entry!!\n");
+    // debug_printf("I am out of thread_entry!!\n");
 }
 
 #ifndef NDEBUG
@@ -216,7 +216,9 @@ static errval_t refill_thread_slabs(struct slab_allocator *slabs)
 
     size_t blocksize = sizeof(struct thread) + tls_block_total_len;
     blocksize += sizeof(struct slab_head) + sizeof(uintptr_t);
+            // debug_printf("&&&&&&&&&& BEFORE PAGING REGION MAP\n");
     err = paging_region_map(&thread_slabs_vm, blocksize, &buf, &size);
+            // debug_printf("&&&&&&&&&& AFTER PAGING REGION MAP\n");
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_VSPACE_MMU_AWARE_MAP);
     }
@@ -383,9 +385,8 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
                                         size_t stacksize)
 {
     // allocate stack
-    debug_printf("&@&!&!!&!& I am in thread_create_unrunnable\n");
+    // debug_printf("&@&!&!!&!& I am in thread_create_unrunnable\n");
     assert((stacksize % sizeof(uintptr_t)) == 0);
-    debug_printf("After malloc in thread_create_unrunnable\n");
     // allocate space for TCB + initial TLS data
     // no mutex as it may deadlock: see comment for thread_slabs_spinlock
     // thread_mutex_lock(&thread_slabs_mutex);
@@ -395,6 +396,7 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
     // thread_mutex_unlock(&thread_slabs_mutex);
     if (space == NULL) {
         //free(stack);
+        // debug_printf("thread_create_unrunnable: space == NULL\n");
         return NULL;
     }
     // split space into TLS data followed by TCB
@@ -402,9 +404,12 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
     // architectures support TLS, we'll need to break out the logic.
     void *tls_data = space;
     struct thread *newthread = (void *)((uintptr_t)space + tls_block_total_len);
+    paging_init_onthread(newthread);
 
     // init thread
+    // debug_printf("thread_create_unrunnable: BEFORE thread_init\n");
     thread_init(curdispatcher(), newthread);
+    // debug_printf("thread_create_unrunnable: AFTER thread_init\n");
     newthread->slab = space;
 
     if (tls_block_total_len > 0) {
@@ -435,8 +440,7 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
         return NULL;
     }
 #endif
-
-    paging_init_onthread(newthread);
+    
     void *stack = malloc(stacksize);
     if (stack == NULL) {
         return NULL;
@@ -469,18 +473,18 @@ struct thread *thread_create_unrunnable(thread_func_t start_func, void *arg,
 struct thread *thread_create_varstack(thread_func_t start_func, void *arg,
                                       size_t stacksize)
 {
-    debug_printf("Inside thread_create_varstack\n");
+    // debug_printf("Inside thread_create_varstack\n");
     struct thread *newthread = thread_create_unrunnable(start_func, arg, stacksize);
     if (newthread) {
         // enqueue on runq
-        debug_printf("@!*!**!*!*! It's a newthread\n");
+        // debug_printf("@!*!**!*!*! It's a newthread\n");
         dispatcher_handle_t handle = disp_disable();
         struct dispatcher_generic *disp_gen = get_dispatcher_generic(handle);
         newthread->disp = handle;
         thread_enqueue(newthread, &disp_gen->runq);
         disp_enable(handle);
     }
-    debug_printf("Success Thread creation\n");
+    // debug_printf("Success Thread creation\n");
     return newthread;
 }
 
@@ -1132,7 +1136,7 @@ static int bootstrap_thread(struct spawn_domain_params *params)
     }
     slab_init(&thread_slabs, blocksize, refill_thread_slabs);
 
-    if (init_domain_global) {
+    if (init_domain_global || true) {
         // run main() on this thread, since we can't allocate
         if (tls_block_total_len > 0) {
             USER_PANIC("unsupported: use of TLS data in bootstrap domain\n");
@@ -1159,7 +1163,7 @@ static int bootstrap_thread(struct spawn_domain_params *params)
  */
 void thread_init_disabled(dispatcher_handle_t handle, bool init_domain)
 {
-    debug_printf("!!!!@@@@@@ I am in thread_init_disabled %d\n", handle);
+    // debug_printf("!!!!@@@@@@ I am in thread_init_disabled %d\n", handle);
     struct dispatcher_shared_generic *disp =
         get_dispatcher_shared_generic(handle);
     struct dispatcher_generic *disp_gen = get_dispatcher_generic(handle);
@@ -1414,7 +1418,7 @@ static void exception_handler_wrapper(arch_registers_state_t *cpuframe,
                                       uintptr_t hack_arg, void *addr)
 {
     struct thread *me = thread_self();
-    //debug_printf("************* I am in exception_handler_wrapper %d\n", me->disp);
+    //// debug_printf("************* I am in exception_handler_wrapper %d\n", me->disp);
     assert(me->in_exception);
     assert(me->exception_handler != NULL);
 

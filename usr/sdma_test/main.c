@@ -1,10 +1,11 @@
 #include <aos/aos.h>
 #include <aos/waitset.h>
+#include <nameserver_rpc.h>
 #include <omap_timer/timer.h>
 #include <sdma/sdma_rpc.h>
 
 #define DEFAULT_BUF_SIZE 1099
-#define MAGNITUDE_ORDERS 5
+#define MAGNITUDE_ORDERS 3
 
 inline size_t pow(size_t base, size_t exp) {
     size_t res = 1;
@@ -16,18 +17,37 @@ inline size_t pow(size_t base, size_t exp) {
 
 int main(int argc, char** argv)
 {
+    // 0. Get SDMA endpoint cap.
+    // 0.1. Open connection to Nameserver.
+    struct aos_ns_rpc ns_rpc;
+    ns_rpc.it = 0;
+
+    struct waitset ns_ws;
+    waitset_init(&ns_ws);
+    CHECK("initializing new aos_ns_rpc_init", aos_ns_init(&ns_rpc, &ns_ws));
+
+    // 1.2. Get SDMA driver endpoint cap from Nameserver.
+    struct capref dummy_cap;
+    slot_alloc(&dummy_cap);
+    CHECK("Getting SDMA cap from Nameserver",
+            lookup(&ns_rpc, "sdma", &dummy_cap));
+    debug_printf("DUMMY CAP IS AT %p\n", &dummy_cap);
+    CHECK("copying dummy cap into cap_sdma_ep", cap_copy(cap_sdma_ep, dummy_cap));
+    debug_printf("Successfully received SDMA EP cap from Nameserver\n");
+
     // 1. Connect to SDMA driver.
-	struct sdma_rpc rpc;
+	struct sdma_rpc sdma_rpc;
     struct waitset sdma_ws;
     waitset_init(&sdma_ws);
-	errval_t err = sdma_rpc_init(&rpc, &sdma_ws);
+    debug_printf("Calling sdma_rpc_init for rpc at %p\n", &sdma_rpc);
+	errval_t err = sdma_rpc_init(&sdma_rpc, &sdma_ws);
 	if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "sdma_rpc_init failed");
     }
     debug_printf("Connected to SDMA driver\n");
 
     // I. Memcpy: 2. Allocate src frame.
-    size_t frame_size = 1024 * 30 * BASE_PAGE_SIZE;
+    size_t frame_size = 1024 * 3 * BASE_PAGE_SIZE;
     struct capref src;
     size_t retsize;
     err = frame_alloc(&src, frame_size, &retsize);
@@ -72,10 +92,10 @@ int main(int argc, char** argv)
     debug_printf("Mapped dst frame into vspace at %p\n", dst_buf);
     char* dst_cbuf = (char*) dst_buf;
 
-    // 7. Perform SDMA memcpy RPC.
+    // 7. Perform SDMA memcpy sdma_rpc.
     size_t dst_offset = 0;
     size_t src_offset = 0;
-    size_t num_mem_ops = 10;
+    size_t num_mem_ops = 1;
 
     omap_timer_init();
     omap_timer_ctrl(true);
@@ -84,14 +104,15 @@ int main(int argc, char** argv)
     for (size_t j = 0; j < MAGNITUDE_ORDERS; ++j) {
         for (size_t i = 0; i < num_mem_ops; ++i) {
             uint64_t timer_start = omap_timer_read();
-            err = sdma_rpc_memcpy(&rpc, dst, dst_offset, src, src_offset, buf_size);
+            err = sdma_rpc_memcpy(&sdma_rpc, dst, dst_offset, src, src_offset,
+                    buf_size);
             if (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "sdma_rpc_memcpy failed");
             }
             // debug_printf("SDMA memcpy request sent, awaiting post-copy ack...\n");
 
             // 8. Wait for SDMA response.
-            err = sdma_rpc_wait_for_response(&rpc);
+            err = sdma_rpc_wait_for_response(&sdma_rpc);
             if (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "sdma_rpc_wait_for_response failed");
             }
@@ -130,14 +151,14 @@ int main(int argc, char** argv)
     for (size_t j = 0; j < MAGNITUDE_ORDERS; ++j) {
         for (size_t i = 0; i < num_mem_ops; ++i) {
             uint64_t timer_start = omap_timer_read();
-            err = sdma_rpc_memset(&rpc, dst, dst_offset, buf_size, val);
+            err = sdma_rpc_memset(&sdma_rpc, dst, dst_offset, buf_size, val);
             if (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "sdma_rpc_memset failed");
             }
             // debug_printf("SDMA memcpy request sent, awaiting post-copy ack...\n");
 
             // 8. Wait for SDMA response.
-            err = sdma_rpc_wait_for_response(&rpc);
+            err = sdma_rpc_wait_for_response(&sdma_rpc);
             if (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "sdma_rpc_wait_for_response failed");
             }
@@ -184,12 +205,12 @@ int main(int argc, char** argv)
             }
             sys_debug_flush_cache();
             uint64_t timer_start = omap_timer_read();
-            err = sdma_rpc_rotate(&rpc, dst, dst_offset, src, src_offset, width,
+            err = sdma_rpc_rotate(&sdma_rpc, dst, dst_offset, src, src_offset, width,
                     height);
             if (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "sdma_rpc_rotate failed");
             }
-            err = sdma_rpc_wait_for_response(&rpc);
+            err = sdma_rpc_wait_for_response(&sdma_rpc);
             if (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "sdma_rpc_wait_for_response failed");
             }

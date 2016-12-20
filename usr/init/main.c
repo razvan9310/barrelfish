@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
             my_core_id);
     CHECK("forging RAM cap & retrieving bi from URPC frame",
             read_from_urpc(urpc_buf, &bi, my_core_id));
-    // CHECK("start core 1", start_core(1, my_core_id, bi));
+    CHECK("start core 1", start_core(1, my_core_id, bi));
 
     if (my_core_id == 1) {
         err = initialize_ram_alloc(&remaining_mem_base, &remaining_mem_size);
@@ -120,43 +120,63 @@ int main(int argc, char *argv[])
     CHECK("Create Slot", lmp_chan_alloc_recv_slot(lc));
     CHECK("Copy to initep", cap_copy(cap_initep, lc->local_cap));
 
+    struct scheduler sc;
+    scheduler_init(&sc, my_core_id, urpc_buf);
     if (my_core_id == 0) {
         CHECK("spawning nameserver",
                 spawn_load_by_name("nameserver",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)),
                         my_core_id));
-        uint32_t i = 0;
-        while (i < 1000000) {
-            ++i;
+        
+        // Busy wait on the waitset to make sure we've shaken hands with the
+        // Nameserver.
+        void* arg = malloc(ROUND_UP(sizeof(struct lmp_chan*), 4)
+                + ROUND_UP(sizeof(struct client_state*), 4));
+        void* arg_cpy = arg;
+        *((struct lmp_chan**) arg) = lc;
+        arg = (void*) ROUND_UP((uintptr_t) arg + sizeof(struct lmp_chan*), 4);
+        *((struct client_state**) arg) = sc.local_clients;
+
+        debug_printf("Waiting for Nameserver to hanshake...\n");
+        CHECK("lmp_chan_register_recv",
+                lmp_chan_register_recv(lc, get_default_waitset(),
+                        MKCLOSURE((void*) local_recv_once_handler, arg_cpy)));
+        for (size_t j = 0; j < 2; ++j) {
+            event_dispatch(get_default_waitset());
+            debug_printf("OK! :)\n");
         }
+        CHECK("creating slot for subsequent LMP", lmp_chan_alloc_recv_slot(lc));
+
         CHECK("spawning sdma",
                 spawn_load_by_name(
                         "sdma",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)),
                         my_core_id));
+        size_t i = 0;
         while(i<1000000) {
             i++;
         }
-        CHECK("spawning bash",
-                spawn_load_by_name("bash",
-                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
-        add_process_ps_list("init");
-        add_process_ps_list("nameserver");
-        add_process_ps_list("sdma");
-        add_process_ps_list("bash");
-    } else {
-        add_process_ps_list("init");
-    }
-
-    if (my_core_id == 1) { // let's give something to do to core 1 too :D
         CHECK("spawning net",
                 spawn_load_by_name("net",
                         (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+
+        add_process_ps_list("init");
+        add_process_ps_list("nameserver");
+        add_process_ps_list("sdma");
+        add_process_ps_list("net");
+    } else {
+        CHECK("spawning bash",
+                spawn_load_by_name("bash",
+                        (struct spawninfo*) malloc(sizeof(struct spawninfo)), my_core_id));
+
+        add_process_ps_list("init");
+        add_process_ps_list("bash");
+    }
+
+    if (my_core_id == 1) { // let's give something to do to core 1 too :D
     }
 
     debug_printf("Message handler loop\n");
-    struct scheduler sc;
-    scheduler_init(&sc, my_core_id, urpc_buf);
     scheduler_start(&sc, lc);
     // // Hang around
     // struct waitset *default_ws = get_default_waitset();
