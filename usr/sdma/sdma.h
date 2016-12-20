@@ -51,6 +51,11 @@ struct client_state {
     uint8_t have_caps;
     size_t len;
 
+    // Use to simulate memset via memcpy -- will use this as source frame.
+    struct capref memset_frame;
+    struct frame_identity memset_frame_id;
+    uint8_t* memset_buf;
+
     // For rotate ops only:
     size_t width;
     size_t height;
@@ -86,11 +91,6 @@ struct sdma_driver {
 
 	// Channel state, 32 channels.
 	struct channel_state chan_state[SDMA_CHANNELS];
-
-    // Use to simulate memset via memcpy -- will use this as source frame.
-    struct capref memset_frame;
-    struct frame_identity memset_frame_id;
-    uint8_t* memset_buf;
 
 	// RPC clients.
 	struct client_state* clients;

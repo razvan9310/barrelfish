@@ -116,17 +116,6 @@ errval_t sdma_setup_config(struct sdma_driver* sd)
 
 errval_t sdma_setup_rpc_server(struct sdma_driver* sd)
 {
-    // Allocate a frame for the memset buffer & map it.
-    size_t retsize;
-    CHECK("allocating frame for memset",
-            frame_alloc(&sd->memset_frame, SDMA_MEMSET_SIZE, &retsize));
-    CHECK("mapping memset frame into vspace",
-            paging_map_frame(get_current_paging_state(),
-                    (void**) &sd->memset_buf, retsize, sd->memset_frame,
-                    NULL, NULL));
-    CHECK("identifying memset frame",
-            frame_identify(sd->memset_frame, &sd->memset_frame_id));
-
     sd->lc = get_init_rpc()->lc;
 
     static struct aos_rpc new_aos_rpc;
@@ -238,6 +227,25 @@ void* sdma_process_handshake(struct sdma_driver* sd, struct capref* cap)
     client->src_offset = 0;
     client->dst_offset = 0;
     client->len = 0;
+
+    // Allocate a frame for the memset buffer & map it.
+    size_t retsize;
+    errval_t err = frame_alloc(&client->memset_frame, SDMA_MEMSET_SIZE,
+            &retsize);
+    if (err_is_fail(err)) {
+        USER_PANIC_ERR(err, "frame_alloc for memset frame");
+    }
+    err = paging_map_frame(get_current_paging_state(),
+            (void**) &client->memset_buf, retsize, client->memset_frame,
+            NULL, NULL);
+    if (err_is_fail(err)) {
+        USER_PANIC_ERR(err, "paging_map_frame for memset frame");
+    }
+    err = frame_identify(client->memset_frame, &client->memset_frame_id);
+    if (err_is_fail(err)) {
+        USER_PANIC_ERR(err, "frame_identify for memset frame");
+    }
+
     sd->clients = client;
 
     // Endpoint for further reference.
@@ -247,7 +255,7 @@ void* sdma_process_handshake(struct sdma_driver* sd, struct capref* cap)
 
     // New channel.
     lmp_chan_accept(&client->lc, DEFAULT_LMP_BUF_WORDS, *cap);
-    errval_t err = lmp_chan_alloc_recv_slot(&client->lc);
+    err = lmp_chan_alloc_recv_slot(&client->lc);
     if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "lmp_chan_alloc_recv_slot for new client");
     }
@@ -383,7 +391,7 @@ void* sdma_process_memset(struct sdma_driver* sd, struct client_state* client,
         if (cond1 && cond2) {
             size_t min_len = len < SDMA_MEMSET_SIZE ? len : SDMA_MEMSET_SIZE;
             for (size_t i = 0; i < min_len; ++i) {
-                sd->memset_buf[i] = val;
+                client->memset_buf[i] = val;
             }
             // debug_printf("Filled %u bytes of the memset buffer with value %c(%u)\n",
             //         min_len, val, val);
@@ -398,7 +406,7 @@ void* sdma_process_memset(struct sdma_driver* sd, struct client_state* client,
             client->dst_offset = min_len;
 
             err = sdma_start_transfer(sd, client,
-                    (size_t) sd->memset_frame_id.base,
+                    (size_t) client->memset_frame_id.base,
                     (size_t) cap_id.base, min_len);
         } else {
             err = SDMA_ERR_MEMSET;
